@@ -26,6 +26,7 @@ const PANELS = {
   inv:      { title:'INVENTÁRIO', key:'I', tabs:{ items:'ITENS', garage:'GARAGEM' } },
   shop:     { title:'LOJA — MERCADO KESSLER', key:'P', tabs:{ modules:'MÓDULOS', ships:'NAVES', vehicles:'VEÍCULOS', furniture:'MÓVEIS', sell:'VENDER' } },
   contracts:{ title:'CONTRATOS', key:'Q', tabs:{} },
+  food:     { title:'COMIDA', key:'E', tabs:{} },
   settings: { title:'CONFIGURAÇÕES', key:'Esc', tabs:{ audio:'ÁUDIO', controls:'CONTROLES', video:'VÍDEO', game:'JOGO' } },
 };
 const ui = { panel:null, tab:null, sel:null, filter:'ALL', ship:null };
@@ -49,11 +50,11 @@ const atHome = () => mode==='hub';                         // decoração: só n
 
 function renderPanel(){
   const P = PANELS[ui.panel];
-  document.getElementById('p-title').textContent = '▌ '+P.title;
+  document.getElementById('p-title').textContent = '▌ '+(ui.panel==='food' ? ui.food : P.title);
   document.getElementById('p-key').innerHTML = `<kbd>${P.key}</kbd> ou <kbd>Esc</kbd> fecha · ${CUR} ${state.credits}`;
   document.getElementById('p-tabs').innerHTML = Object.entries(P.tabs).map(([k,v])=>`<button class="btn ${k===ui.tab?'on':''}" data-a="tab" data-v="${k}">${v}</button>`).join('');
   const body = document.getElementById('p-body');
-  body.innerHTML = ({ inv:renderInv, shop:renderShop, contracts:renderContracts, settings:renderSettings })[ui.panel]();
+  body.innerHTML = ({ inv:renderInv, shop:renderShop, contracts:renderContracts, settings:renderSettings, food:renderFood })[ui.panel]();
   if(ui.panel==='inv' && ui.tab==='garage'){ const sv=document.getElementById('shipview'); const pv=preview(); sv.appendChild(pv.r.domElement);
     pv.r.setSize(sv.clientWidth||290, sv.clientHeight||190, false); pv.c.aspect=(sv.clientWidth||290)/(sv.clientHeight||190); pv.c.updateProjectionMatrix();
     setPreview(ui.ship?.startsWith('v:') ? ui.ship : (state.ships.find(s=>s.uid===ui.ship)?.model||'kestrel')); }
@@ -63,7 +64,7 @@ function renderPanel(){
 function renderInv(){
   if(ui.tab==='garage') return renderGarage();
   const ids = Object.keys(state.inv).filter(id=>qty(id)>0 && (ui.filter==='ALL' || ITEMS[id].cat===ui.filter));
-  const chips = [['ALL','TODOS'],['MATERIAL','MATERIAIS'],['MÓDULO','MÓDULOS'],['MÓVEL','MÓVEIS'],['CARGA','CARGA']]
+  const chips = [['ALL','TODOS'],['MATERIAL','MATERIAIS'],['MINÉRIO','MINÉRIOS'],['RECURSO','RECURSOS'],['COMIDA','COMIDA'],['MÓDULO','MÓDULOS'],['MÓVEL','MÓVEIS'],['CARGA','CARGA']]
     .map(([k,v])=>`<button class="btn sm ${ui.filter===k?'on':''}" data-a="filter" data-v="${k}">${v}</button>`).join('');
   const cards = ids.map(id=>{ const it=ITEMS[id], c=CATS[it.cat];
     return `<div class="card ${ui.sel===id?'sel':''}" data-a="sel" data-v="${id}" style="--cat:${c.c}"><span class="q">x${qty(id)}</span>
@@ -76,7 +77,9 @@ function renderInv(){
     side = `<div style="font-size:54px;color:${c.c}">${c.ic}</div><div style="font-size:26px">${it.name}</div>
       <div><span class="tag" style="margin:0">${it.cat}</span> <span class="p">x${qty(ui.sel)}</span></div>
       <p class="d">${it.desc}</p>`;
-    if(it.sell) side += `<p>Valor de venda: <span class="p">${CUR}${it.sell}</span>/un. — venda na Loja [P]</p>`;
+    if(it.use){ const u=it.use; side += `<p class="d">${[u.food?`+${u.food} saciedade`:'',u.hp?`+${u.hp} vida`:'',u.boost?`energia ilimitada ${u.boost}s`:''].filter(Boolean).join(' · ')}</p>
+      <button class="btn g" data-a="consume" data-v="${ui.sel}">CONSUMIR</button>`; }
+    if(it.sell) side += `<p>Valor base: <span class="p">${CUR}${it.sell}</span>/un. — venda em cidades (cada mercado paga diferente)</p>`;
     if(it.slot) side += `<p>Encaixe: <b>${SLOTS[it.slot]}</b></p><button class="btn c" data-a="tab" data-v="garage">INSTALAR NA GARAGEM ▸</button>`;
     if(it.cat==='MÓVEL') side += atHome() ? `<button class="btn g" data-a="place" data-v="${ui.sel}">COLOCAR NO APARTAMENTO</button>`
                                           : `<p class="d">Só é possível decorar estando no apartamento.</p>`;
@@ -166,13 +169,33 @@ function renderShop(){
     for(const [id,it] of Object.entries(ITEMS)) if(it.cat==='MÓVEL' && it.price)
       h += row(it.name, 'MÓVEL', it.desc, CUR+it.price, buy('buy',id,it.price, qty(id)>0 || !!state.placed[id]));
   if(ui.tab==='sell'){
+    const mk = marketHere();
+    if(!mk){ h += `<div class="empty">Vendas só acontecem em cidades. Vá a Nova Kessler ou a Porto Ferrugem.</div>`; return h; }
+    h += `<p class="d">Mercado de <b>${mk.name}</b> — os preços variam entre as cidades.</p>`;
     const sellables = Object.keys(state.inv).filter(id=>qty(id)>0 && (ITEMS[id].sell || (ITEMS[id].cat==='MÓDULO' && ITEMS[id].price)));
-    if(!sellables.length) h += `<div class="empty">Nada para vender. Sucata e módulos não instalados aparecem aqui.</div>`;
-    for(const id of sellables){ const it=ITEMS[id], p=it.sell || Math.floor(it.price/2);
-      h += row(`${it.name} <span class="p">x${qty(id)}</span>`, it.cat, it.sell?'Cotação do ferro-velho de hoje.':'Revenda a 50% do preço.', `${CUR}${p}/un.`,
+    if(!sellables.length) h += `<div class="empty">Nada para vender. Sucata, minérios, recursos e módulos não instalados aparecem aqui.</div>`;
+    for(const id of sellables){ const it=ITEMS[id], m=mk.market[it.cat]||1, p=sellPrice(id,mk);
+      h += row(`${it.name} <span class="p">x${qty(id)}</span>`, it.cat, (it.sell?'Cotação de hoje':'Revenda a 50% do preço')+(m!==1?` · ${m>1?'+':''}${Math.round((m-1)*100)}% neste mercado`:''), `${CUR}${p}/un.`,
         `<button class="btn sm g" data-a="sell" data-v="${id}:1">VENDER 1</button> ${qty(id)>1?`<button class="btn sm g" data-a="sell" data-v="${id}:all">TUDO (+${CUR}${p*qty(id)})</button>`:''}`); }
   }
   return h;
+}
+function marketHere(){
+  if(mode==='hub') return SITES[0];
+  if(mode==='city' && !city.fly) return siteAt(playerWorld(), 150);
+  return null;
+}
+const sellPrice = (id, mk) => { const it=ITEMS[id]; return Math.max(1, Math.round((it.sell || Math.floor(it.price/2)) * (mk.market[it.cat]||1))); };
+// ---- Comida
+function openFood(name){ ui.food=name; openPanel('food'); }
+function renderFood(){
+  const ids = MENUS[ui.food] || [];
+  let h = `<p class="d">Saciedade <b>${Math.round(state.stats.food)}%</b> · Vida <b>${Math.round(state.stats.hp)}%</b> · Saldo <span class="p">${CUR} ${state.credits}</span></p>`;
+  for(const id of ids){ const f=FOODS[id], eff=[f.food?`+${f.food} saciedade`:'', f.hp?`+${f.hp} vida`:'', f.boost?`energia ilimitada ${f.boost}s`:''].filter(Boolean).join(' · ');
+    h += `<div class="item"><div><div>${f.name} <span class="p">${CUR}${f.price}</span></div><div class="d">${f.desc} — ${eff}</div></div>
+      <div style="white-space:nowrap"><button class="btn g" data-a="eat" data-v="${id}" ${state.credits<f.price?'disabled':''}>COMER</button>
+      <button class="btn" data-a="take" data-v="${id}" ${state.credits<f.price?'disabled':''}>LEVAR</button></div></div>`; }
+  return h + `<p class="d" style="margin-top:12px">"Levar" guarda no inventário [I] para consumir depois.</p>`;
 }
 // ---- Contratos
 function renderContracts(){
@@ -194,11 +217,14 @@ function renderSettings(){
   let h = '';
   if(ui.tab==='audio') h = range('master','Volume geral',0,1,.05,pct)+range('music','Música (toca-fitas)',0,1,.05,pct)+range('sfx','Efeitos sonoros',0,1,.05,pct);
   if(ui.tab==='controls') h = range('sens','Sensibilidade do mouse',.2,3,.1,v=>(+v).toFixed(1)+'x')+check('invertY','Inverter eixo Y')+
-    `<h3>Atalhos</h3><table class="keys d">${[['Mouse','Câmera (a pé) / mira (nave)'],['W A S D','Andar / dirigir / acelerar e esquivar'],['Enter','Pular decolagem'],['Shift','Correr'],['V','Alternar 1ª / 3ª pessoa'],['E','Interagir'],['G / R','Mover / girar móvel'],
-      ['Clique / F','Atirar'],['Espaço','Freio de emergência'],['I','Inventário e garagem'],['P','Loja'],['Q','Contratos'],['Esc','Configurações / fechar painel']]
+    `<h3>Atalhos</h3><table class="keys d">${[
+      ['Mouse','Câmera (a pé e dirigindo) / mira (nave)'],['W A S D','Andar · dirigir · potência da nave'],['Shift','Correr (gasta energia) · pós-combustor da nave'],
+      ['Espaço','Pular (a pé) · freio (carro e nave)'],['Clique','Socar (a pé) · atirar (órbita)'],['E','Interagir · comer · coletar · dirigir · embarcar · pousar'],
+      ['O','Nave: subir para a órbita'],['Enter','Pular a subida à órbita'],['V','Alternar 1ª / 3ª pessoa'],['G / R','Mover / girar móvel (apartamento)'],
+      ['I','Inventário e garagem'],['P','Loja'],['Q','Contratos'],['Esc','Configurações / fechar painel']]
       .map(([a,b])=>`<tr><td><kbd>${a}</kbd></td><td>${b}</td></tr>`).join('')}</table>`;
   if(ui.tab==='video') h = range('scale','Escala de resolução',.5,1,.05,pct)+range('fov','Campo de visão (FOV)',55,95,1,v=>v+'°')+
-    check('hints','Mostrar dicas de controle')+check('crt','Filtro CRT retrô');
+    check('crt','Filtro CRT retrô');
   if(ui.tab==='game') h = `<div class="item"><div>Salvar progresso<div class="d">O jogo salva automaticamente a cada ação.</div></div><button class="btn g" data-a="savenow">SALVAR AGORA</button></div>
     <div class="item"><div>Restaurar configurações padrão</div><button class="btn" data-a="resetset">RESTAURAR</button></div>
     <div class="item"><div>Apagar progresso<div class="d">Créditos, inventário, naves e móveis voltam ao início.</div></div><button class="btn r" data-a="reset">APAGAR SAVE</button></div>`;
@@ -208,7 +234,6 @@ function applySettings(){
   if(actx){ master.gain.value=settings.master; musicBus.gain.value=settings.music; sfxBus.gain.value=settings.sfx; }
   renderer.setPixelRatio(Math.min(devicePixelRatio||1, 1.5)*settings.scale); renderer.setSize(innerWidth, innerHeight);
   document.body.classList.toggle('crt', !!settings.crt); document.body.classList.toggle('pixel', !!settings.crt);
-  document.body.classList.toggle('nohints', !settings.hints);
   hub.cam.fov = settings.fov-5; hub.cam.updateProjectionMatrix();
 }
 
@@ -234,7 +259,10 @@ panelEl.addEventListener('click', e=>{
     case 'buyship': { const sd=SHIPS[v]; if(state.credits<sd.price) break; state.credits-=sd.price;
       state.ships.push({ uid:'s'+Date.now(), model:v, slots:{ engine:null, weapon:'cannon_basic', armor:null } }); sfx.coin();
       toast(`${sd.name} entregue no hangar → Garagem [I]`, '#7dff9a'); break; }
-    case 'sell': { const [id,n]=v.split(':'), it=ITEMS[id], p=it.sell||Math.floor(it.price/2), k=n==='all'?qty(id):1;
+    case 'eat': { const f=FOODS[v]; if(state.credits<f.price) break; state.credits-=f.price; feed(f); toast(`${f.name} — delicioso.`, '#ffb347'); break; }
+    case 'take': { const f=FOODS[v]; if(state.credits<f.price) break; state.credits-=f.price; addItem('f_'+v,1); sfx.coin(); toast(`${f.name} → inventário`, '#7dff9a'); break; }
+    case 'consume': { const it=ITEMS[v]; if(!it.use || qty(v)<1) break; addItem(v,-1); feed(it.use); toast(`Consumido: ${it.name}`, '#ffb347'); break; }
+    case 'sell': { const mk=marketHere(); if(!mk) break; const [id,n]=v.split(':'), it=ITEMS[id], p=sellPrice(id,mk), k=n==='all'?qty(id):1;
       addItem(id,-k); state.credits+=p*k; sfx.coin(); toast(`Vendido: ${k}x ${it.name}  +${CUR}${p*k}`, '#7dff9a'); break; }
     case 'buyveh': { const vd=VEHICLES[v]; if(state.credits<vd.price || state.vehicles.includes(v)) break; state.credits-=vd.price; state.vehicles.push(v);
       if(city.player) syncCityVehicles(); sfx.coin();
@@ -273,16 +301,7 @@ let lastPrompt=null;
 function setPrompt(s){ if(s!==lastPrompt){ document.getElementById('prompt').textContent=s; lastPrompt=s; } }
 let centerT=0;
 function setCenter(html, dur){ const c=document.getElementById('center'); c.innerHTML=html; c.style.display='block'; centerT=dur; }
-function setHelp(){
-  const k=s=>`<kbd>${s}</kbd>`, menus=` ${k('V')} 1ª/3ª pessoa · ${k('I')} inventário ${k('P')} loja ${k('Q')} contratos ${k('Esc')} config.`;
-  let h;
-  if(mode==='hub') h = `${k('Mouse')} câmera ${k('WASD')} andar ${k('Shift')} correr ${k('E')} interagir ${k('G')} mover móvel`;
-  else if(mode==='city' && city.launch) h = `Decolando... ${k('Enter')} pular sequência`;
-  else if(mode==='city' && city.drive) h = `${k('Mouse')} olhar ${k('W')} acelerar ${k('S')} frear/ré ${k('A')}/${k('D')} virar ${k('Espaço')} freio de mão ${k('E')} sair`;
-  else if(mode==='city') h = `${k('Mouse')} câmera ${k('WASD')} andar ${k('Shift')} correr ${k('E')} interagir / dirigir`;
-  else h = `${k('Mouse')} mira ${k('W')}/${k('S')} acelerar ${k('A')}/${k('D')} esquiva ${k('Espaço')} freio ${k('Clique')} atirar`;
-  document.getElementById('help').innerHTML = h + menus;
-}
+function setHelp(){}   // atalhos ficam em Configurações > Controles (sem rodapé na tela)
 let transitioning=false;
 function transition(fn, white){
   transitioning=true;

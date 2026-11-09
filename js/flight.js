@@ -155,7 +155,7 @@ function resetFlight(){
   fl.maxHull = fl.stats.hull; fl.hull = fl.maxHull;
   for(let i=0;i<30;i++){ let p; do{ p=new V3(rand(-350,350),rand(-100,100),rand(-450,250)); }while(p.length()<30); spawnScrap(p); }
   for(let i=0;i<4;i++) spawnDrone(new V3(0,0,-80));
-  fl.cam.position.set(0,3,30);
+  fl.cam.position.set(0,3,30); fl.camReset=true;
   document.getElementById('s-ship').textContent = SHIPS[s.model].name;
 }
 
@@ -287,8 +287,9 @@ function updateFlight(dt, t){
     fl.cam.quaternion.copy(S.g.quaternion);
     fl.cam.rotateZ(S.model.rotation.z*.35);
   } else {
-    const back = new V3(0,2.8,11).applyQuaternion(S.g.quaternion);
-    fl.cam.position.lerp(sp.clone().add(back), 1-Math.exp(-7*dt));
+    if(!fl.camQ || fl.camReset){ fl.camQ=S.g.quaternion.clone(); fl.camReset=false; }
+    fl.camQ.slerp(S.g.quaternion, 1-Math.exp(-7*dt));                     // distância fixa: só a rotação é suavizada
+    fl.cam.position.copy(sp).add(new V3(0,2.8,11).applyQuaternion(fl.camQ));
     fl.cam.lookAt(sp.clone().addScaledVector(_f.set(0,0,-1).applyQuaternion(S.g.quaternion), 18).addScaledVector(_a, 12));
   }
   if(fl.shake>0){ fl.cam.position.add(new V3(rand(-1,1),rand(-1,1),rand(-1,1)).multiplyScalar(fl.shake*(settings.fp?.3:1))); fl.shake*=Math.exp(-6*dt); }
@@ -344,6 +345,6 @@ function shipDestroyed(){
 }
 function jumpHome(){
   fl.dead=true; sfx.jump(); toast('Salto iniciado...', '#5ef2ff');
-  transition(()=>{ enterCity('hangar'); toast('Reentrada concluída · Hangar 07, Nova Kessler', '#5ef2ff'); }, true);
+  transition(()=>{ enterCity('reentry'); toast('Reentrada em Aurora · pilote até o Hangar 07 ou pouse onde quiser (E)', '#5ef2ff'); }, true);
 }
 

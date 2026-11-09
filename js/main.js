@@ -1,37 +1,33 @@
 'use strict';
-/* Modos de jogo (título, apartamento, cidade, voo), input e loop principal */
+/* Modos de jogo (título, apartamento, planeta Aurora, órbita), input e loop principal */
 
 // ================================================================ MODOS
 let mode='title';
-const HUD_BY_MODE = {
-  hub:    [],
-  city:   ['loc','minimap'],
-  flight: ['flightstats','crosshair','aim'],
-};
 function hudFor(m){
+  const on = m==='city' ? ['loc','minimap'].concat(city.fly?['aim']:[]) : m==='flight' ? ['flightstats','crosshair','aim'] : [];
   ['flightstats','crosshair','aim','mk-gate','mk-station','mk-home','mk-hangar','loc','minimap','alt','center']
-    .forEach(id=>document.getElementById(id).style.display = HUD_BY_MODE[m]?.includes(id) ? 'block' : 'none');
+    .forEach(id=>document.getElementById(id).style.display = on.includes(id) ? 'block' : 'none');
+  document.getElementById('mk-station').style.color='';
   droneMk.forEach(m=>m.style.display='none');
+  vitalsKey='';
 }
 function enterHub(){
   mode='hub'; hub.player.position.set(EL_POS.x-1.4, 0, EL_POS.z); hub.player.rotation.y=-Math.PI/2; hub.yaw=Math.PI/2; hub.pitch=settings.fp?0:.3;
-  hudFor('hub'); setHelp(); updateHUD();
+  hudFor('hub'); updateHUD();
 }
 function enterCity(where){
   if(city.launch) endLaunch();
-  mode='city'; cityPlace(where); hudFor('city'); setHelp(); updateHUD();
+  mode='city'; cityPlace(where); hudFor('city'); updateHUD();
 }
 function goCity(where){
   if(hub.carry) hubCarry();
   sfx.door(); toast('Elevador descendo ao térreo...', '#ffb347');
   transition(()=>{ enterCity(where); toast('Nova Kessler, planeta Aurora · o Hangar 07 fica a leste (H no mapa)', '#5ef2ff'); });
 }
-function goHub(){
-  sfx.door(); transition(()=>{ enterHub(); toast('Apartamento 07 · 80º andar', '#ffb347'); });
-}
+function goHub(){ sfx.door(); transition(()=>{ enterHub(); toast('Apartamento 07 · 80º andar', '#ffb347'); }); }
 function reachOrbit(){
-  endLaunch();
-  mode='flight'; resetFlight(); hudFor('flight'); setHelp(); updateHUD();
+  endLaunch(); city.fly=null; engineStop();
+  mode='flight'; resetFlight(); hudFor('flight'); updateHUD();
   toast(`Órbita alcançada · ${SHIPS[activeShip().model].name} · Setor Kessler`, '#5ef2ff');
 }
 
@@ -54,13 +50,17 @@ function look(dx, dy){
   const s = settings.sens*.0022, inv = settings.invertY?-1:1, [lo,hi]=pitchLimits();
   if(mode==='hub'){ hub.yaw -= dx*s; hub.pitch = clamp(hub.pitch + dy*s*inv, lo, hi); }
   else if(mode==='city' && !city.launch){
+    if(city.fly){ city.fly.aimYaw -= dx*s*.8; city.fly.aimPitch -= dy*s*.8*inv; return; }
     if(city.drive){ city.camOff -= dx*s; city.lookT = 1.2; } else city.yaw -= dx*s;
     city.pitch = clamp(city.pitch + dy*s*inv, lo, hi);
   }
   else if(mode==='flight' && !fl.dead){ fl.aimYaw -= dx*s*.8; fl.aimPitch -= dy*s*.8*inv; }
 }
 addEventListener('mousemove', e=>{ if(isLocked() && !ui.panel) look(e.movementX||0, e.movementY||0); });
-canvas.addEventListener('mousedown', e=>{ if(!isLocked()){ lock(); return; } if(e.button===0) mouseDown=true; });
+canvas.addEventListener('mousedown', e=>{
+  if(!isLocked()){ lock(); return; }
+  if(e.button===0){ mouseDown=true; if(mode==='city') punch(); }
+});
 document.getElementById('lockhint').style.pointerEvents='auto';
 document.getElementById('lockhint').addEventListener('click', lock);
 addEventListener('mouseup', ()=>{ mouseDown=false; });
@@ -93,6 +93,7 @@ addEventListener('keydown', e=>{
   }
   if(mode==='city'){
     if(e.code==='KeyE') cityInteract();
+    if(e.code==='KeyO' && city.fly && (city.fly.alt||0)>150) startAscent();
     if(e.code==='Enter' && city.launch) city.launch.skip = true;
   }
 });
@@ -106,7 +107,7 @@ function start(){
   initAudio(); if(actx && actx.state==='suspended') actx.resume();
   document.getElementById('title').style.display='none'; document.getElementById('hud').style.display='block';
   enterHub(); hub.player.position.set(0,0,2.5); hub.player.rotation.y=Math.PI; hub.yaw=0; hub.pitch=settings.fp?0:.3;
-  toast(state.completed||state.kills ? 'Bem-vindo de volta, piloto.' : 'Apartamento 07, Torre Kessler. O elevador leva à rua — e ao hangar.', '#ffb347');
+  toast(state.completed||state.kills ? 'Bem-vindo de volta, piloto.' : 'Apartamento 07, Torre Kessler. O elevador leva à rua — e ao planeta inteiro.', '#ffb347');
   lock(); updateLockHint();
 }
 document.getElementById('start').addEventListener('click', start);
@@ -118,8 +119,9 @@ const clock = new THREE.Clock(); let T=0;
   requestAnimationFrame(loop);
   const dt = Math.min(clock.getDelta(), .05); T+=dt;
   if(centerT>0){ centerT-=dt; if(centerT<=0) document.getElementById('center').style.display='none'; }
+  updateSurvival(dt,T);
   if(mode==='flight'){
-    if(!ui.panel) updateFlight(dt,T);          // painéis pausam o voo
+    if(!ui.panel) updateFlight(dt,T);          // painéis pausam o voo orbital
     renderer.render(fl.scene, fl.cam);
   } else if(mode==='city'){
     updateCity(dt,T);

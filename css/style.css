@@ -31,8 +31,6 @@
   #contract b{color:var(--cyan)}
   #prompt{position:absolute;bottom:70px;left:50%;transform:translateX(-50%);font-size:26px;
     color:var(--cyan);text-shadow:0 0 8px var(--cyan);white-space:nowrap}
-  #help{position:absolute;bottom:14px;left:14px;font-size:17px;color:var(--muted);max-width:94vw}
-  body.nohints #help{display:none}
   kbd{color:var(--amber);border:1px solid var(--amber-dim);padding:0 4px;margin:0 2px;font-family:inherit}
   #toasts{position:absolute;top:70px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
   .toast{padding:6px 16px;border:1px solid currentColor;background:rgba(8,6,4,.85);font-size:22px;
@@ -115,3 +113,17 @@
   #mk-home{color:var(--cyan)} #mk-hangar{color:#ff7a3a}
   @media (max-width:700px){#minimap{width:120px;height:120px}}
   @media (max-width:900px){#loc{top:auto;bottom:200px;font-size:17px}}
+
+  /* ---------- vida, energia, saciedade e procurado ---------- */
+  #vitals{position:absolute;left:14px;bottom:14px;width:240px;display:none;font-size:17px}
+  #vitals .vrow{display:grid;grid-template-columns:86px 1fr;align-items:center;gap:8px}
+  #vitals .bar{margin:3px 0}
+  #v-hp>i{background:#ff4a4a;box-shadow:0 0 6px #ff4a4a}
+  #v-st>i{background:#ffd040;box-shadow:0 0 6px #ffd040}
+  #v-st.boost>i{background:#5ef2ff;box-shadow:0 0 8px #5ef2ff}
+  #v-food>i{background:#7dff9a;box-shadow:0 0 6px #7dff9a}
+  #v-food.low>i{background:#ff8a3a;animation:blink 1s steps(2) infinite}
+  @keyframes blink{50%{opacity:.35}}
+  #wanted{position:absolute;top:118px;right:14px;font-size:24px;color:#ff4a4a;display:none;background:rgba(10,4,4,.7);border:1px solid #7a3c3c;padding:4px 12px}
+  #wanted b{color:#ffd040;text-shadow:0 0 10px #ffd040;animation:blink .8s steps(2) infinite}
+  #wanted span{color:#4a3030}
