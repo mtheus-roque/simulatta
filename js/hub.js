@@ -145,7 +145,7 @@ const FURN = {
            [[-.6,-.32],[.6,-.32],[-.6,.32],[.6,.32]].forEach(([x,z])=>box(.06,.42,.06,M(0x2a2a2a),x,.21,z,g));
            [[-.3,.1],[.35,-.15]].forEach(([x,z])=>cyl(.06,.06,.12,8,M(0xd8d0c0),x,.55,z,g));
            box(.22,.03,.14,M(0x111111),0,.5,.15,g); box(.22,.03,.14,M(0x1a1a22),.1,.53,-.1,g); return g; } },
-  bench: { r:1.1, act:'bench', label:'Bancada de Peças', build(){ const g=new THREE.Group();
+  bench: { r:1.1, act:'bench', label:'Bancada de Fabricação', build(){ const g=new THREE.Group();
            box(2,.1,.8,M(0x5a4a3a),0,.9,0,g); box(.6,.85,.75,M(0x3a3a40),-.65,.43,0,g); box(.06,.85,.06,M(0x2a2a2a),.95,.43,.35,g);
            box(2,1.2,.06,M(0x8a8478),0,1.75,-.4,g);
            const tc=[0xb8b8b0,0xd04020,0x40a0d0,0xd8b040];
@@ -275,7 +275,7 @@ function hubInteract(){
   else if(id==='elevator') goCity('home');
   else if(id==='tape'){ const on=musicToggle(); toast(on?'♪ Fita: "Blues de Órbita Baixa" — lado A':'■ Fita pausada', '#ffb347'); }
   else if(id==='arcade') toast('NEO-COMET · RECORDE 48.210 — "insira ficha" (em breve)', '#ff4ab0');
-  else if(id==='bench') openPanel('inv','garage');
+  else if(id==='bench') openPanel('craft');
 }
 function hubCarry(){
   if(hub.carry){

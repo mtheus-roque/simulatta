@@ -24,8 +24,9 @@ function progress(type, n=1){
 // ================================================================ PAINÉIS (I / P / Q / Esc)
 const PANELS = {
   inv:      { title:'INVENTÁRIO', key:'I', tabs:{ items:'ITENS', garage:'GARAGEM' } },
-  shop:     { title:'LOJA — MERCADO KESSLER', key:'P', tabs:{ modules:'MÓDULOS', ships:'NAVES', vehicles:'VEÍCULOS', furniture:'MÓVEIS', sell:'VENDER' } },
-  contracts:{ title:'CONTRATOS', key:'Q', tabs:{} },
+  shop:     { title:'LOJA — MERCADO KESSLER', key:'P', tabs:{ weapons:'ARMAS', tools:'FERRAMENTAS', modules:'MÓDULOS', ships:'NAVES', vehicles:'VEÍCULOS', furniture:'MÓVEIS', sell:'VENDER' } },
+  contracts:{ title:'CONTRATOS E TRABALHO', key:'Q', tabs:{ bounty:'RECOMPENSAS', jobs:'EMPREGOS', orbit:'ÓRBITA' } },
+  craft:    { title:'BANCADA DE FABRICAÇÃO', key:'E', tabs:{ ammo:'MUNIÇÃO', gear:'EQUIPAMENTO', ship:'NAVE', mat:'MATERIAIS' } },
   food:     { title:'COMIDA', key:'E', tabs:{} },
   settings: { title:'CONFIGURAÇÕES', key:'Esc', tabs:{ audio:'ÁUDIO', controls:'CONTROLES', video:'VÍDEO', game:'JOGO' } },
 };
@@ -54,7 +55,7 @@ function renderPanel(){
   document.getElementById('p-key').innerHTML = `<kbd>${P.key}</kbd> ou <kbd>Esc</kbd> fecha · ${CUR} ${state.credits}`;
   document.getElementById('p-tabs').innerHTML = Object.entries(P.tabs).map(([k,v])=>`<button class="btn ${k===ui.tab?'on':''}" data-a="tab" data-v="${k}">${v}</button>`).join('');
   const body = document.getElementById('p-body');
-  body.innerHTML = ({ inv:renderInv, shop:renderShop, contracts:renderContracts, settings:renderSettings, food:renderFood })[ui.panel]();
+  body.innerHTML = ({ inv:renderInv, shop:renderShop, contracts:renderContracts, settings:renderSettings, food:renderFood, craft:renderCraft })[ui.panel]();
   if(ui.panel==='inv' && ui.tab==='garage'){ const sv=document.getElementById('shipview'); const pv=preview(); sv.appendChild(pv.r.domElement);
     pv.r.setSize(sv.clientWidth||290, sv.clientHeight||190, false); pv.c.aspect=(sv.clientWidth||290)/(sv.clientHeight||190); pv.c.updateProjectionMatrix();
     setPreview(ui.ship?.startsWith('v:') ? ui.ship : (state.ships.find(s=>s.uid===ui.ship)?.model||'kestrel')); }
@@ -64,7 +65,7 @@ function renderPanel(){
 function renderInv(){
   if(ui.tab==='garage') return renderGarage();
   const ids = Object.keys(state.inv).filter(id=>qty(id)>0 && (ui.filter==='ALL' || ITEMS[id].cat===ui.filter));
-  const chips = [['ALL','TODOS'],['MATERIAL','MATERIAIS'],['MINÉRIO','MINÉRIOS'],['RECURSO','RECURSOS'],['COMIDA','COMIDA'],['MÓDULO','MÓDULOS'],['MÓVEL','MÓVEIS'],['CARGA','CARGA']]
+  const chips = [['ALL','TODOS'],['ARMA','ARMAS'],['MUNIÇÃO','MUNIÇÃO'],['FERRAMENTA','FERRAMENTAS'],['EQUIPAMENTO','EQUIP.'],['MATERIAL','MATERIAIS'],['MINÉRIO','MINÉRIOS'],['RECURSO','RECURSOS'],['COMIDA','COMIDA'],['MÓDULO','MÓDULOS'],['MÓVEL','MÓVEIS'],['CARGA','CARGA']]
     .map(([k,v])=>`<button class="btn sm ${ui.filter===k?'on':''}" data-a="filter" data-v="${k}">${v}</button>`).join('');
   const cards = ids.map(id=>{ const it=ITEMS[id], c=CATS[it.cat];
     return `<div class="card ${ui.sel===id?'sel':''}" data-a="sel" data-v="${id}" style="--cat:${c.c}"><span class="q">x${qty(id)}</span>
@@ -81,6 +82,10 @@ function renderInv(){
       <button class="btn g" data-a="consume" data-v="${ui.sel}">CONSUMIR</button>`; }
     if(it.sell) side += `<p>Valor base: <span class="p">${CUR}${it.sell}</span>/un. — venda em cidades (cada mercado paga diferente)</p>`;
     if(it.slot) side += `<p>Encaixe: <b>${SLOTS[it.slot]}</b></p><button class="btn c" data-a="tab" data-v="garage">INSTALAR NA GARAGEM ▸</button>`;
+    if(it.weapon){ const w=WEAPONS[it.weapon];
+      side += `<p class="d">${w.melee?`Dano ${w.dmg} · alcance ${w.range} m${w.stun?' · atordoa':''}`:`Dano ${w.dmg}${w.pellets?'×'+w.pellets:''} · pente ${w.mag} · alcance ${w.range} m${w.auto?' · automática':''}`}<br>Tecla <kbd>${w.key}</kbd></p>`
+        + (state.weapon===it.weapon ? `<p style="color:var(--green)">● Equipada</p>` : `<button class="btn g" data-a="equipw" data-v="${it.weapon}">EQUIPAR</button>`); }
+    if(it.tool){ const t=TOOLS[it.tool]; side += `<p class="d">Nível ${t.tier} · velocidade ${t.speed}x · +${t.bonus} por coleta</p><p>${bestTool()===it.tool?'<span style="color:var(--green)">● Em uso (sempre a melhor ferramenta)</span>':'Reserva'}</p>`; }
     if(it.cat==='MÓVEL') side += atHome() ? `<button class="btn g" data-a="place" data-v="${ui.sel}">COLOCAR NO APARTAMENTO</button>`
                                           : `<p class="d">Só é possível decorar estando no apartamento.</p>`;
     if(it.cat==='CARGA') side += `<p class="d">Item de contrato — não pode ser vendido.</p>`;
@@ -156,6 +161,16 @@ function renderShop(){
   const buy = (a, id, price, owned) => owned ? `<button class="btn" disabled>ADQUIRIDO</button>`
     : `<button class="btn g" data-a="${a}" data-v="${id}" ${state.credits<price?'disabled':''}>COMPRAR</button>`;
   let h = `<p class="d">Saldo: <span class="p">${CUR} ${state.credits}</span>${docked()?'':' · comprado em voo vai para o inventário'}</p>`;
+  if(ui.tab==='weapons'){
+    for(const [id,w] of Object.entries(WEAPONS)) if(w.price)
+      h += row(w.name, w.melee?'CORPO A CORPO':'TECLA '+w.key, w.desc, CUR+w.price, buy('buy','w_'+id,w.price, qty('w_'+id)>0));
+    for(const [id,a] of Object.entries(AMMO_PACKS))
+      h += row(`${ITEMS[id].name} ×${a.n}`, 'MUNIÇÃO', `${ITEMS[id].desc} Você tem: ${qty(id)}`, CUR+a.price, `<button class="btn g" data-a="buyammo" data-v="${id}" ${state.credits<a.price?'disabled':''}>COMPRAR</button>`);
+    h += row(ITEMS.vest.name, 'EQUIPAMENTO', ITEMS.vest.desc, CUR+ITEMS.vest.price, buy('buy','vest',ITEMS.vest.price, qty('vest')>0));
+  }
+  if(ui.tab==='tools')
+    for(const [id,t] of Object.entries(TOOLS)) if(t.price)
+      h += row(t.name, 'NÍVEL '+t.tier, `${t.desc} Velocidade ${t.speed}x, +${t.bonus} por coleta.`, CUR+t.price, buy('buy','t_'+id,t.price, qty('t_'+id)>0));
   if(ui.tab==='modules')
     for(const [id,it] of Object.entries(ITEMS)) if(it.cat==='MÓDULO' && it.price)
       h += row(it.name, SLOTS[it.slot], `${it.desc} · no inventário: ${qty(id)}`, CUR+it.price, buy('buy',id,it.price,false));
@@ -199,7 +214,9 @@ function renderFood(){
 }
 // ---- Contratos
 function renderContracts(){
-  let h = `<p class="d">Quadro de contratos do distrito. Um contrato ativo por vez.</p>`;
+  if(ui.tab==='bounty') return renderBounties();
+  if(ui.tab==='jobs') return renderJobs();
+  let h = `<p class="d">Contratos orbitais (Setor Kessler). Um contrato ativo por vez.</p>`;
   for(const c of CONTRACTS){
     const act = state.active===c.id;
     h += `<div class="item"><div><div>${c.title} <span class="p">${CUR}${c.reward}</span>${act?'<span class="tag" style="color:var(--cyan)">ATIVO</span>':''}</div><div class="d">${c.desc}</div>
@@ -208,6 +225,37 @@ function renderContracts(){
            :`<button class="btn g" data-a="accept" data-v="${c.id}" ${state.active?'disabled':''}>ACEITAR</button>`}</div>`;
   }
   return h + `<p class="d" style="margin-top:14px">Contratos concluídos: ${state.completed} · Drones abatidos: ${state.kills}</p>`;
+}
+function renderBounties(){
+  const b=state.bounty;
+  let h = `<p class="d">Procurados pela Polícia de Aurora. Capture vivo (+25%) ou abata (60% da recompensa). Alvos rendidos podem ser algemados com <kbd>E</kbd>.</p>`;
+  if(b) return h + `<div class="item"><div><div><b>${b.name}</b> ${'★'.repeat(b.danger)} <span class="p">${CUR}${b.reward}</span><span class="tag" style="color:var(--cyan)">EM CAÇA</span></div>
+    <div class="d">Procurado por ${b.crime}. Visto pela última vez a ${fmtKm(Math.max(0,bountyPos(b).distanceTo(playerWorld())))} daqui. Escolta: ${b.danger+1}.</div></div>
+    <button class="btn r" data-a="bab">ABANDONAR</button></div>`;
+  for(const o of bountyOffers()) h += `<div class="item"><div><div><b>${o.name}</b> <span style="color:#ffd040">${'★'.repeat(o.danger)}</span> <span class="p">${CUR}${o.reward}</span></div>
+    <div class="d">${o.species==='vexari'?'Vexari':o.species==='oskari'?'Oskari':'Humano'} · procurado por ${o.crime} · área a ${fmtKm(Math.acos(clamp(new V3().fromArray(o.d).dot((siteNow()||SITES[0]).up),-1,1))*PLANET.R)} de ${o.from.toLowerCase()}</div></div>
+    <button class="btn g" data-a="bacc" data-v="${o.id}">CAÇAR</button></div>`;
+  return h + `<p class="d" style="margin-top:12px">Recompensas concluídas: ${state.bounties||0}</p>`;
+}
+function renderJobs(){
+  const s=siteNow(), j=work.job;
+  let h = `<p class="d">Trabalho honesto, pagamento garantido. ${s?`Você está em <b>${s.name}</b>.`:'Vá até a rua de uma cidade para trabalhar.'}</p>`;
+  for(const [id,J] of Object.entries(JOBS)){
+    const act = j && j.type===id;
+    h += `<div class="item"><div><div>${J.name} <span class="p">${J.pay}</span>${act?'<span class="tag" style="color:var(--cyan)">ATIVO</span>':''}</div><div class="d">${J.desc}${J.needsCar?' (precisa estar dirigindo)':''}</div></div>
+      ${act?`<button class="btn r" data-a="jcancel">ABANDONAR</button>`:`<button class="btn g" data-a="jstart" data-v="${id}" ${j||!s||mode!=='city'?'disabled':''}>ACEITAR</button>`}</div>`;
+  }
+  return h;
+}
+function renderCraft(){
+  let h = `<p class="d">Transforme minérios e sucata em munição, equipamento e peças de nave.</p>`;
+  for(const r of RECIPES.filter(r=>r.tab===ui.tab)){
+    const [oid,on]=Object.entries(r.out)[0], ok=canCraft(r);
+    const ins = Object.entries(r.in).map(([id,n])=>`<span style="color:${qty(id)>=n?'var(--green)':'var(--red)'}">${n}× ${ITEMS[id].name} (${qty(id)})</span>`).join(' · ');
+    h += `<div class="item"><div><div>${on>1?on+'× ':''}${ITEMS[oid].name}<span class="tag">${ITEMS[oid].cat}</span></div><div class="d">${ins}</div></div>
+      <button class="btn g" data-a="craft" data-v="${r.id}" ${ok?'':'disabled'}>FABRICAR</button></div>`;
+  }
+  return h;
 }
 // ---- Configurações
 function renderSettings(){
@@ -219,7 +267,8 @@ function renderSettings(){
   if(ui.tab==='controls') h = range('sens','Sensibilidade do mouse',.2,3,.1,v=>(+v).toFixed(1)+'x')+check('invertY','Inverter eixo Y')+
     `<h3>Atalhos</h3><table class="keys d">${[
       ['Mouse','Câmera (a pé e dirigindo) / mira (nave)'],['W A S D','Andar · dirigir · potência da nave'],['Shift','Correr (gasta energia) · pós-combustor da nave'],
-      ['Espaço','Pular (a pé) · freio (carro e nave)'],['Clique','Socar (a pé) · atirar (órbita)'],['E','Interagir · comer · coletar · dirigir · embarcar · pousar'],
+      ['Espaço','Pular (a pé) · freio (carro e nave)'],['Clique','Atirar / golpear · segure para golpe forte · atirar (órbita)'],
+      ['Botão direito','Mirar por cima do ombro'],['1 – 4','Trocar arma (1 corpo a corpo · 2 pistola · 3 espingarda · 4 fuzil)'],['R','Recarregar'],['C','Esquiva (gasta energia)'],['E','Interagir · comer · coletar · dirigir · embarcar · pousar'],
       ['O','Nave: subir para a órbita'],['Enter','Pular a subida à órbita'],['V','Alternar 1ª / 3ª pessoa'],['G / R','Mover / girar móvel (apartamento)'],
       ['I','Inventário e garagem'],['P','Loja'],['Q','Contratos'],['Esc','Configurações / fechar painel']]
       .map(([a,b])=>`<tr><td><kbd>${a}</kbd></td><td>${b}</td></tr>`).join('')}</table>`;
@@ -268,6 +317,13 @@ panelEl.addEventListener('click', e=>{
       if(city.player) syncCityVehicles(); sfx.coin();
       toast(`${vd.name} estacionado em frente à Torre Kessler 07`, '#7dff9a'); break; }
     case 'veh': ui.ship='v:'+v; sfx.ui(); break;
+    case 'buyammo': { const a=AMMO_PACKS[v]; if(state.credits<a.price) break; state.credits-=a.price; addItem(v,a.n); sfx.coin(); toast(`+${a.n} ${ITEMS[v].name}`, '#7dff9a'); updateWeaponHUD(); break; }
+    case 'equipw': state.weapon=v; sfx.ui(); updateWeaponHUD(); break;
+    case 'craft': craft(v); break;
+    case 'bacc': { const o=bountyOffers().find(x=>x.id===v); if(o) acceptBounty(o); break; }
+    case 'bab': abandonBounty(); break;
+    case 'jstart': closePanel(); startJob(v); return;
+    case 'jcancel': cancelJob(); break;
     case 'accept': acceptContract(v); break;
     case 'abandon': abandonContract(); break;
     case 'savenow': save(); saveSettings(); toast('Progresso salvo', '#7dff9a'); break;
@@ -289,8 +345,9 @@ function updateHUD(){
   document.getElementById('s-cr').textContent = `${CUR} ${state.credits}`;
   document.getElementById('s-sc').textContent = qty('scrap');
   const c = activeContract(), el=document.getElementById('contract');
-  el.innerHTML = c ? `CONTRATO ATIVO <kbd>Q</kbd><br><b>${c.title}</b><br>${c.type==='deliver'?'Destino: Estação Beta':`Progresso: ${state.progress}/${c.target}`}`
-                   : `Sem contrato ativo<br><span style="color:#9a7a4a">Pressione <kbd>Q</kbd> para ver contratos</span>`;
+  let h = c ? `<div class="trk"><span>CONTRATO ORBITAL</span><b>${c.title}</b><br>${c.type==='deliver'?'Destino: Estação Beta':`Progresso: ${state.progress}/${c.target}`}</div>` : '';
+  h += trackerHTML();
+  el.innerHTML = h || `Nada em andamento<br><span style="color:#9a7a4a"><kbd>Q</kbd> recompensas, empregos e contratos</span>`;
 }
 function toast(msg, color='#ffb347'){
   const t=document.createElement('div'); t.className='toast'; t.style.color=color; t.textContent=msg;

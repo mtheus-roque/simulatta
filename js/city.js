@@ -18,12 +18,18 @@ const FUNCTIONAL_KESSLER = [
   { name:'OFICINA REPARO', color:'#ffb347', act:['shop','modules'],  actLabel:'módulos de nave' },
   { name:'FERRO-VELHO',    color:'#d8a040', act:['shop','sell'],     actLabel:'vender sucata e minérios' },
   { name:'CASA & ANTIGOS', color:'#ff8ad0', act:['shop','furniture'],actLabel:'móveis' },
-  { name:'CONTRATOS',      color:'#7dff9a', act:['contracts'],       actLabel:'quadro de contratos' },
+  { name:'CONTRATOS',      color:'#7dff9a', act:['contracts','orbit'], actLabel:'contratos orbitais' },
+  { name:'ARMAS & MUNIÇÃO',color:'#ff6a5a', act:['shop','weapons'],  actLabel:'armas, munição e colete' },
+  { name:'RECOMPENSAS',    color:'#ffd040', act:['contracts','bounty'], actLabel:'quadro de procurados' },
+  { name:'AGÊNCIA DE EMPREGOS', color:'#5ef2ff', act:['contracts','jobs'], actLabel:'entregas, táxi e manutenção' },
+  { name:'FERRAMENTAS',    color:'#ffd040', act:['shop','tools'],    actLabel:'picaretas, furadeiras e lasers' },
 ];
 const FUNCTIONAL_PORTO = [
   { name:'MERCADOR DE MINÉRIOS', color:'#5affc8', act:['shop','sell'],    actLabel:'paga mais por minérios' },
-  { name:'OFICINA DA DOCA',      color:'#ffb347', act:['shop','modules'], actLabel:'módulos de nave' },
-  { name:'CONTRATOS',            color:'#7dff9a', act:['contracts'],      actLabel:'quadro de contratos' },
+  { name:'OFICINA DA DOCA',      color:'#ffb347', act:['craft'],          actLabel:'bancada de fabricação' },
+  { name:'ARMEIRO DO PORTO',     color:'#ff6a5a', act:['shop','weapons'], actLabel:'armas e munição' },
+  { name:'RECOMPENSAS',          color:'#ffd040', act:['contracts','bounty'], actLabel:'quadro de procurados' },
+  { name:'AGÊNCIA DE EMPREGOS',  color:'#5ef2ff', act:['contracts','jobs'], actLabel:'entregas, táxi e manutenção' },
 ];
 const SITE_CFG = {
   kessler:{ N:7, seed:1337, styles:[0,1,2,3], tall:1, npcN:70, trafficN:34, airN:26, outer:1650, anchor:HOME_DOOR, spawn:new V3(0,.2,46),
@@ -591,8 +597,8 @@ function collideWorld(P, r, walker){
     }
     toWorld(s,l,P);
   }
-  if(walker){ for(const id in city.vehicles){ const v=city.vehicles[id]; if(v===city.drive) continue; const dx=P.distanceTo(v.g.position); if(dx<r+1.4) P.sub(v.g.position).setLength(r+1.4).add(v.g.position); }
-    if(city.ship && !city.fly){ const sh=city.ship.g.position; if(P.distanceTo(sh)<r+5) P.sub(sh).setLength(r+5).add(sh); } }
+  if(walker){ for(const id in city.vehicles){ const v=city.vehicles[id]; if(v===city.drive) continue; const dx=P.distanceTo(v.g.position); if(dx<r+1.4 && dx>1e-3) P.sub(v.g.position).setLength(r+1.4).add(v.g.position); }
+    if(city.ship && !city.fly){ const sh=city.ship.g.position, dx=P.distanceTo(sh); if(dx<r+5 && dx>1e-3) P.sub(sh).setLength(r+5).add(sh); } }
   return hit;
 }
 let groundWater=false;
@@ -633,17 +639,18 @@ const _qy=new THREE.Quaternion(), _qa=new THREE.Quaternion(), _mv=new V3(), _pre
 const qYaw = (y, out=_qy)=>out.setFromAxisAngle(Y_AXIS, y);
 let waterT=0;
 function updateWalk(dt,t){
-  const p=city.player, F=city.frame, P=p.position, inp=!ui.panel;
+  const p=city.player, F=city.frame, P=p.position, inp=!ui.panel && !work.mini;
   let mx=0, mz=0;
   if(inp){ if(keys.KeyW||keys.ArrowUp) mz+=1; if(keys.KeyS||keys.ArrowDown) mz-=1; if(keys.KeyA||keys.ArrowLeft) mx-=1; if(keys.KeyD||keys.ArrowRight) mx+=1; }
   const fx=-Math.sin(city.yaw), fz=-Math.cos(city.yaw), rx=Math.cos(city.yaw), rz=-Math.sin(city.yaw);
   let vx=fx*mz+rx*mx, vz=fz*mz+rz*mx; const len=Math.hypot(vx,vz);
-  const sp = survSpeed(len>0 && inp && keys.ShiftLeft, dt);
+  const sp = survSpeed(len>0 && inp && keys.ShiftLeft && !combat.aiming, dt) * (combat.aiming?.55:1);
   _prev.copy(P);
   if(len>0){ vx/=len; vz/=len; P.add(_mv.set(vx,0,vz).applyQuaternion(F.q).multiplyScalar(sp*dt));
     if(!settings.fp) city.heading = lerpAngle(city.heading, Math.atan2(vx,vz), Math.min(1,12*dt)); city.walk += dt*sp*2.5; }
   else city.walk*=.85;
-  if(settings.fp) city.heading = city.yaw+Math.PI;
+  if(combat.dodgeT>0) P.addScaledVector(combat.dodgeDir, 15*dt);                 // esquiva
+  if(settings.fp || combat.aiming || combat.faceT>0) city.heading = city.yaw+Math.PI;   // mira: o corpo acompanha a câmera
   // pulo e gravidade
   if(inp && keys.Space && city.air<=.01 && survJump()){ city.vy=5.4; }
   city.vy -= 15*dt; city.air = Math.max(0, city.air+city.vy*dt); if(city.air===0 && city.vy<0) city.vy=0;
@@ -651,18 +658,20 @@ function updateWalk(dt,t){
   const s = groundAt(P,_gp,_gu);
   if(!s && groundWater){ P.copy(_prev); groundAt(P,_gp,_gu); if(t-waterT>3){ waterT=t; toast('Água profunda — não dá para atravessar a nado', '#5ef2ff'); } }
   P.copy(_gp).addScaledVector(_gu, city.air);
+  if(!isFinite(P.x+P.y+P.z)){ P.copy(_prev); city.air=0; city.vy=0; }           // salvaguarda contra posição inválida
   transport(F,_gu); city.here = s;
   p.quaternion.copy(F.q).multiply(qYaw(city.heading));
   const sw=Math.sin(city.walk)*.6*(len>0&&city.air<.05?1:0); p.userData.legL.rotation.x=sw; p.userData.legR.rotation.x=-sw;
   p.visible=!settings.fp;
   if(settings.fp) camFirst(_tgt.copy(P).addScaledVector(F.up,1.72), F, city.yaw, city.pitch);
+  else if(combat.aiming) camThird(_tgt.copy(P).addScaledVector(F.up,1.65).add(_mv.set(Math.cos(city.yaw)*.85,0,-Math.sin(city.yaw)*.85).applyQuaternion(F.q)), F, city.yaw, city.pitch, 2.9);   // por cima do ombro
   else camThird(_tgt.copy(P).addScaledVector(F.up,1.6), F, city.yaw, city.pitch, 4.6);
   // interação
   let best=null, bd=99;
-  for(const it of cityInteractables()){ const d=it.d; if(d<it.r && d<bd){ bd=d; best=it; } }
+  for(const it of cityInteractables()){ const d=it.d-(it.prio?5:0); if(it.d<it.r && d<bd){ bd=d; best=it; } }   // empregos/recompensas têm prioridade
   city.near=best;
   if(city.mining) updateMining(dt);
-  else setPrompt(ui.panel?'':(best?best.label:''));
+  else setPrompt(ui.panel||work.mini?'':(best?best.label:''));
 }
 function cityInteractables(){
   const L=[], P=city.player.position, s=siteAt(P,50);
@@ -675,10 +684,12 @@ function cityInteractables(){
   for(const id in city.vehicles){ const v=city.vehicles[id]; L.push({ d:P.distanceTo(v.g.position), r:v.def.kind==='truck'?3.8:3.1, label:`[E] Dirigir — ${v.def.name}`, fn:()=>enterVehicle(id) }); }
   if(city.ship) L.push({ d:P.distanceTo(city.ship.g.position), r:15, label:`[E] Embarcar — ${SHIPS[activeShip().model].name} · voar`, fn:boardShip });
   for(const dep of nearbyDeposits()){ const d=P.distanceTo(dep.pos); if(d<3) L.push({ d, r:3, label:`[E] Coletar — ${DEPOSITS[dep.type].name}`, fn:()=>startMining(dep) }); }
+  L.push(...combatInteractables(P), ...workInteractables(P));
   return L;
 }
 function shopAct(s){
   if(s.act) return openPanel(s.act[0], s.act[1]);
+  if(s.name==='ARMAS') return openPanel('shop','weapons');
   if(MENUS[s.name]) return openFood(s.name);
   if(s.msg) return toast(s.msg, s.color);
   toast(`${s.name} — fechado por enquanto`, s.color);
@@ -687,21 +698,9 @@ function cityInteract(){
   if(city.launch) return;
   if(city.fly) return flyInteract();
   if(city.drive) return exitVehicle();
+  if(city.mining) return mineTap();                    // minijogo de extração (startMining/updateMining ficam em work.js)
+  if(work.mini) return;
   if(city.near) city.near.fn();
-}
-// coleta de recursos
-function startMining(dep){ city.mining={ dep, t:0 }; tone({type:'square',f0:300,f1:500,dur:.1,vol:.05}); }
-function updateMining(dt){
-  const m=city.mining, P=city.player.position;
-  if(P.distanceTo(m.dep.pos)>3.6 || m.dep.gone){ city.mining=null; setPrompt(''); return; }
-  m.t+=dt; const need=m.dep.type==='herbs'?1:1.8;
-  if(Math.floor(m.t*6)!==Math.floor((m.t-dt)*6)) noise({dur:.05,vol:.08,filter:'bandpass',freq:m.dep.type==='herbs'?1200:2600});
-  setPrompt(`Coletando ${DEPOSITS[m.dep.type].name}... ${Math.min(100,Math.round(m.t/need*100))}%`);
-  if(m.t>=need){
-    const D=DEPOSITS[m.dep.type], n=D.qty[0]+((Math.random()*(D.qty[1]-D.qty[0]+1))|0);
-    addItem(D.item,n); m.dep.gone=true; m.dep.g.visible=false; state.mined[m.dep.key]=Date.now(); save(); updateHUD();
-    sfx.pickup(); toast(`+${n} ${D.name} → inventário [I]`, '#5affc8'); city.mining=null;
-  }
 }
 
 // ---------------------------------------------------------------- veículos do jogador
@@ -756,7 +755,8 @@ function updateDrive(dt,t){
   P.add(_mv.set(-Math.sin(v.yaw),0,-Math.cos(v.yaw)).applyQuaternion(F.q).multiplyScalar(v.speed*dt));
   if(collideWorld(P, d.kind==='bike'?.7:d.kind==='truck'?1.7:1.4, false) && Math.abs(v.speed)>2){
     const imp=Math.abs(v.speed);
-    if(imp>8){ noise({dur:.25,vol:.3,freq:500}); city.shake=.4; } if(imp>14) playerDamage((imp-14)*1.6,'Batida de carro');
+    if(imp>8){ noise({dur:.25,vol:.3,freq:500}); city.shake=.4; if(work.job && work.job.type==='taxi' && work.job.step==='ride') work.job.bumps++; }
+    if(imp>14) playerDamage((imp-14)*1.6,'Batida de carro');
     v.speed*=-.25;
   }
   vehicleHits(v);
@@ -978,6 +978,8 @@ function drawMinimap(){
   for(const dep of nearbyDeposits()) dot(dep.pos, dep.type==='crystal'?'#7ff6ff':dep.type==='herbs'?'#c87aff':'#ffb347', 3);
   for(const id in city.vehicles) if(city.vehicles[id]!==city.drive) dot(city.vehicles[id].g.position,'#5ef2ff',2);
   for(const u of policeUnitsWorld()) dot(u,'#ff3a3a',3);
+  for(const [p,c] of combatMapDots()){ if(c==='camp'){ if(p.distanceTo(P)<4000) icon(p,'▲','#ff6a5a'); } else dot(p,c,3); }
+  const ob=currentObjective(); if(ob) icon(ob.pos,'!','#ffd040');
   if(city.ship && !city.fly) icon(city.ship.g.position,'✈','#ffb347');
   icon(toWorld(SITES[0],HOME_DOOR,new V3()),'⌂','#5ef2ff'); icon(toWorld(SITES[0],HANGAR_PAD,new V3()),'H','#ff7a3a');
   icon(SITES[1].center,'P','#ff9a5a');
@@ -1026,11 +1028,12 @@ function updateCity(dt,t){
     for(const fn of s.anim) fn(t,dt);
   }
   updateChunks(P, t);
+  updateCombat(dt,t); updateWork(dt,t);
   if(t-city.tickT>.07){ city.tickT=t; drawTicker(t); }
   const cp=city.cam.position, d=_gd.subVectors(cp,PC).normalize(), camAlt = altitudeOf(cp);
   surfaceUp(d,_camUp);
   updateSky(city.scene, cp, _camUp, clamp(camAlt/21000,0,1));
-  const fov=settings.fov + (city.drive ? Math.abs(city.drive.speed)*.25 : city.fly ? Math.min(10,city.fly.speed*.01) : 0);
+  const fov=settings.fov + (city.drive ? Math.abs(city.drive.speed)*.25 : city.fly ? Math.min(10,city.fly.speed*.01) : combat.aiming ? -18 : 0);
   if(Math.abs(city.cam.fov-fov)>.05){ city.cam.fov += (fov-city.cam.fov)*Math.min(1,4*dt); city.cam.updateProjectionMatrix(); }
   cityHUD();
 }

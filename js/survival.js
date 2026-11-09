@@ -22,6 +22,8 @@ function feed(f){
 }
 function playerDamage(n, why){
   if(mode!=='city' || surv.downing) return;
+  if(combat.iframe>0) return;                                          // esquiva: invulnerável
+  if(qty('vest')>0) n*=.65;                                             // colete balístico
   const S=state.stats; S.hp -= n;
   const d=document.getElementById('dmg'); d.style.transition='none'; d.style.opacity=.8; requestAnimationFrame(()=>{ d.style.transition='opacity .5s'; d.style.opacity=0; });
   sfx.hurt(); if(surv.hurtT<=0){ toast(`${why}  −${Math.round(n)} de vida`, '#ff4a4a'); surv.hurtT=1.5; }

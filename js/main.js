@@ -5,11 +5,12 @@
 let mode='title';
 function hudFor(m){
   const on = m==='city' ? ['loc','minimap'].concat(city.fly?['aim']:[]) : m==='flight' ? ['flightstats','crosshair','aim'] : [];
-  ['flightstats','crosshair','aim','mk-gate','mk-station','mk-home','mk-hangar','loc','minimap','alt','center']
+  ['flightstats','crosshair','aim','mk-gate','mk-station','mk-home','mk-hangar','mk-obj','loc','minimap','alt','center','minebar']
     .forEach(id=>document.getElementById(id).style.display = on.includes(id) ? 'block' : 'none');
   document.getElementById('mk-station').style.color='';
   droneMk.forEach(m=>m.style.display='none');
-  vitalsKey='';
+  vitalsKey=''; weaponKey='';
+  if(m!=='city'){ document.getElementById('weapon').style.display='none'; combat.aiming=false; combat.firing=false; }
 }
 function enterHub(){
   mode='hub'; hub.player.position.set(EL_POS.x-1.4, 0, EL_POS.z); hub.player.rotation.y=-Math.PI/2; hub.yaw=Math.PI/2; hub.pitch=settings.fp?0:.3;
@@ -59,11 +60,13 @@ function look(dx, dy){
 addEventListener('mousemove', e=>{ if(isLocked() && !ui.panel) look(e.movementX||0, e.movementY||0); });
 canvas.addEventListener('mousedown', e=>{
   if(!isLocked()){ lock(); return; }
-  if(e.button===0){ mouseDown=true; if(mode==='city') punch(); }
+  if(e.button===0) mouseDown=true;
+  if(mode==='city') combatDown(e.button);        // esquerdo: atirar / golpear (segure para golpe forte) · direito: mirar
 });
+canvas.addEventListener('contextmenu', e=>e.preventDefault());
 document.getElementById('lockhint').style.pointerEvents='auto';
 document.getElementById('lockhint').addEventListener('click', lock);
-addEventListener('mouseup', ()=>{ mouseDown=false; });
+addEventListener('mouseup', e=>{ if(e.button===0) mouseDown=false; combatUp(e.button); });
 addEventListener('keydown', e=>{
   if(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Tab'].includes(e.code)) e.preventDefault();
   keys[e.code]=true;
@@ -91,7 +94,11 @@ addEventListener('keydown', e=>{
     if(e.code==='KeyG') hubCarry();
     if(e.code==='KeyR' && hub.carry){ hub.carryRot += Math.PI/4; sfx.ui(); }
   }
+  if(mode==='city' && work.mini && miniKey(e.code)) return;      // minijogo de manutenção (setas)
+  if(mode==='city' || mode==='hub'){ const n=['Digit1','Digit2','Digit3','Digit4'].indexOf(e.code); if(n>=0) return selectWeapon(n+1); }
   if(mode==='city'){
+    if(e.code==='KeyR') reloadWeapon();
+    if(e.code==='KeyC') dodge();
     if(e.code==='KeyE') cityInteract();
     if(e.code==='KeyO' && city.fly && (city.fly.alt||0)>150) startAscent();
     if(e.code==='Enter' && city.launch) city.launch.skip = true;
@@ -113,7 +120,7 @@ function start(){
 document.getElementById('start').addEventListener('click', start);
 
 // ================================================================ LOOP
-buildHub(); buildFlight(); buildCity(); applySettings(); updateHUD();
+buildHub(); buildFlight(); buildCity(); initCombat(); applySettings(); updateHUD();
 const clock = new THREE.Clock(); let T=0;
 (function loop(){
   requestAnimationFrame(loop);

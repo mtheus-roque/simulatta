@@ -3,7 +3,8 @@
 // ================================================================ DADOS
 const CUR = '₢';
 const CATS = { MATERIAL:{ic:'▣',c:'#d8a040'}, 'MINÉRIO':{ic:'◆',c:'#8ad8ff'}, RECURSO:{ic:'✿',c:'#c8a0ff'}, COMIDA:{ic:'♨',c:'#ffb347'},
-  'MÓDULO':{ic:'⚙',c:'#5ef2ff'}, 'MÓVEL':{ic:'▙',c:'#ff8ad0'}, CARGA:{ic:'▤',c:'#7dff9a'} };
+  'MÓDULO':{ic:'⚙',c:'#5ef2ff'}, 'MÓVEL':{ic:'▙',c:'#ff8ad0'}, CARGA:{ic:'▤',c:'#7dff9a'},
+  ARMA:{ic:'⌐',c:'#ff6a5a'}, FERRAMENTA:{ic:'⚒',c:'#ffd040'}, 'MUNIÇÃO':{ic:'⁂',c:'#ff9a5a'}, EQUIPAMENTO:{ic:'⛨',c:'#8ab4ff'} };
 const SLOTS = { engine:'MOTOR', weapon:'ARMA', armor:'BLINDAGEM' };
 const ITEMS = {
   scrap:        { name:'Sucata',               cat:'MATERIAL', desc:'Metal recuperado de destroços. Vendável na loja.', sell:12 },
@@ -21,6 +22,56 @@ const ITEMS = {
   ore_copper:   { name:'Minério de Cobre',     cat:'MINÉRIO', sell:24, desc:'Veios esverdeados comuns no Deserto Rubro.' },
   crystal:      { name:'Cristal de Aurorita',  cat:'MINÉRIO', sell:65, desc:'Cristal luminoso das montanhas e geleiras. Porto Ferrugem paga mais.' },
   herbs:        { name:'Ervas Medicinais',     cat:'RECURSO', sell:14, use:{ hp:15, food:3 }, desc:'Folhas roxas das planícies. Fecham cortes — podem ser consumidas.' },
+  ore_titanium: { name:'Titânio Bruto',        cat:'MINÉRIO', sell:110, desc:'Metal raro dos picos gelados. Exige Laser de Mineração.' },
+  alloy:        { name:'Liga de Titânio',      cat:'MATERIAL', sell:330, desc:'Lingote refinado na bancada. Vale muito mais que o minério.' },
+  // munição (cada unidade = 1 disparo)
+  ammo_p: { name:'Munição .45 Pesada',   cat:'MUNIÇÃO', desc:'Para a Pistola Pesada.' },
+  ammo_s: { name:'Cartucho Cinético',    cat:'MUNIÇÃO', desc:'Para a Espingarda Cinética.' },
+  ammo_r: { name:'Célula de Pulso',      cat:'MUNIÇÃO', desc:'Para o Fuzil de Pulso.' },
+  vest:   { name:'Colete Balístico',     cat:'EQUIPAMENTO', price:380, desc:'Placas de liga sob o casaco. Reduz 35% do dano recebido.' },
+};
+// armas de mão — dmg por projétil; rate = segundos entre disparos/golpes
+const WEAPONS = {
+  fists:   { name:'Punhos',              melee:true, dmg:9,  range:1.8, rate:.32, key:1 },
+  baton:   { name:'Bastão de Choque',    melee:true, dmg:15, range:2.2, rate:.4,  stun:1.6, price:180, key:1, desc:'Atordoa o alvo. Ideal para capturar recompensas vivas.' },
+  knife:   { name:'Faca Térmica',        melee:true, dmg:22, range:1.9, rate:.28, price:240, key:1, desc:'Lâmina aquecida a 900 °C. Rápida e letal.' },
+  pistol:  { name:'Pistola Pesada',      dmg:26, rate:.32, mag:8,  ammo:'ammo_p', spread:.012, range:140, reload:1.4, price:350, key:2, desc:'Semiautomática de calibre .45. Confiável.' },
+  shotgun: { name:'Espingarda Cinética', dmg:11, pellets:7, rate:.85, mag:5, ammo:'ammo_s', spread:.075, range:40, reload:2.2, price:620, key:3, desc:'Sete projéteis cinéticos por disparo. Devastadora de perto.' },
+  rifle:   { name:'Fuzil de Pulso',      dmg:17, rate:.1, mag:30, ammo:'ammo_r', spread:.02, range:170, reload:2, auto:true, price:950, key:4, desc:'Automático, cadência alta e células de energia.' },
+};
+for(const [id,w] of Object.entries(WEAPONS)) if(id!=='fists') ITEMS['w_'+id] = { name:w.name, cat:'ARMA', price:w.price, desc:w.desc, weapon:id };
+const AMMO_PACKS = { ammo_p:{ n:24, price:40 }, ammo_s:{ n:10, price:55 }, ammo_r:{ n:60, price:90 } };
+// ferramentas de extração — tier define quais jazidas podem ser coletadas
+const TOOLS = {
+  hands: { name:'Mãos',                  tier:0, speed:1,   bonus:0 },
+  pick:  { name:'Picareta Mecânica',     tier:1, speed:1,   bonus:0, price:120,  desc:'Ferro e cobre. O começo de toda fortuna.' },
+  drill: { name:'Furadeira de Plasma',   tier:2, speed:1.7, bonus:1, price:480,  desc:'Corta cristal. Mais rápida e rende mais.' },
+  laser: { name:'Laser de Mineração',    tier:3, speed:2.6, bonus:2, price:1250, desc:'Corta qualquer coisa — inclusive titânio.' },
+};
+for(const [id,t] of Object.entries(TOOLS)) if(id!=='hands') ITEMS['t_'+id] = { name:t.name, cat:'FERRAMENTA', price:t.price, desc:t.desc, tool:id };
+// receitas da bancada: in = ingredientes, out = produto
+const RECIPES = [
+  { id:'r_ammo_p', tab:'ammo', out:{ ammo_p:24 }, in:{ ore_iron:2, scrap:1 } },
+  { id:'r_ammo_s', tab:'ammo', out:{ ammo_s:10 }, in:{ ore_iron:2, ore_copper:1 } },
+  { id:'r_ammo_r', tab:'ammo', out:{ ammo_r:40 }, in:{ ore_copper:1, crystal:1 } },
+  { id:'r_kit',    tab:'gear', out:{ f_kit:1 },   in:{ herbs:3 } },
+  { id:'r_vest',   tab:'gear', out:{ vest:1 },    in:{ ore_iron:4, ore_copper:2 } },
+  { id:'r_knife',  tab:'gear', out:{ w_knife:1 }, in:{ ore_iron:3, crystal:1 } },
+  { id:'r_drill',  tab:'gear', out:{ t_drill:1 }, in:{ ore_iron:5, ore_copper:3, crystal:1 } },
+  { id:'r_laser',  tab:'gear', out:{ t_laser:1 }, in:{ ore_titanium:2, crystal:3, ore_copper:4 } },
+  { id:'r_dual',   tab:'ship', out:{ cannon_dual:1 }, in:{ ore_iron:6, ore_copper:3, crystal:2, scrap:4 } },
+  { id:'r_engine', tab:'ship', out:{ engine_t1:1 },   in:{ ore_copper:4, crystal:3, ore_titanium:2 } },
+  { id:'r_armor',  tab:'ship', out:{ armor_scrap:1 }, in:{ ore_iron:6, scrap:6 } },
+  { id:'r_alloy',  tab:'mat',  out:{ alloy:1 },       in:{ ore_titanium:2, ore_iron:2 } },
+];
+// recompensas (caça a procurados) e empregos civis
+const BOUNTY_NAMES = [ ['Dex "Trava" Morrow','human'], ['Kaela Voss','vexari'], ['Brokk, o Rachado','oskari'], ['Ivo Lâmina','human'], ['Sena Okonkwo','human'],
+  ['Tarsus Vel','vexari'], ['Gorm Pedra-Negra','oskari'], ['Mirela "Faísca" Duarte','human'], ['Ilyx Sombra','vexari'], ['Rukk Meia-Orelha','oskari'] ];
+const BOUNTY_CRIMES = ['assalto ao trem de minério','contrabando de aurorita','fuga da Estação Beta','sabotagem de doca','roubo de nave','extorsão de mercadores','tráfico de implantes'];
+const JOBS = {
+  delivery:{ name:'Entregas Expressas', desc:'Pegue a encomenda numa loja e entregue em outra antes do prazo.', pay:'₢40–110' },
+  taxi:    { name:'Táxi Kessler',       desc:'Busque passageiros e leve-os ao destino. Dirija bem para ganhar gorjeta.', pay:'₢50–140', needsCar:true },
+  repair:  { name:'Manutenção Urbana',  desc:'Conserte 3 painéis de energia com defeito pela cidade.', pay:'₢120' },
 };
 // comida (paga com créditos locais) — saciedade (food), vida (hp) e energia ilimitada temporária (boost, em segundos)
 const FOODS = {
@@ -61,10 +112,12 @@ function defaultState(){
   return { credits:150, inv:{ scrap:0 }, active:null, progress:0, completed:0, kills:0,
     placed:{ sofa:{x:-1.2,z:1.7,r:Math.PI}, table:{x:-1.2,z:-.2,r:0}, bench:{x:7,z:-2.4,r:-Math.PI/2} },
     ships:[ { uid:'s1', model:'kestrel', slots:{ engine:null, weapon:'cannon_basic', armor:null } } ], activeShip:'s1',
-    vehicles:['vanta'], vpos:{}, stats:{ hp:100, food:85 }, mined:{}, ship:null };
+    vehicles:['vanta'], vpos:{}, stats:{ hp:100, food:85 }, mined:{}, ship:null,
+    weapon:'pistol', clip:{ pistol:8 }, camps:{}, bounty:null, bountySeed:1, bounties:0 };
 }
 function load(key, def){ try{ const r=localStorage.getItem(key); if(r) return Object.assign(def, JSON.parse(r)); }catch(e){} return def; }
 let state = load(SAVE_KEY, defaultState());
+if(!state.kitV3){ state.kitV3=true; state.inv.w_pistol=1; state.inv.ammo_p=(state.inv.ammo_p||0)+24; state.inv.t_pick=1; }   // kit inicial: pistola, munição e picareta
 function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }catch(e){} }
 const DEFAULT_SETTINGS = { fp:false, master:.8, music:.7, sfx:.8, sens:1, invertY:false, scale:1, fov:72, crt:false };
 let settings = load(SET_KEY, Object.assign({}, DEFAULT_SETTINGS));

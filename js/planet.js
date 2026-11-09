@@ -118,7 +118,7 @@ function surfaceUp(d, out){                                // "cima" local: plan
   return out.copy(d);
 }
 function placeOnPlanet(obj, p, sink=0){                    // apoia um objeto no relevo, alinhado com o "cima" local
-  const d=_ge.subVectors(p,PC).normalize(), r=groundR(d);
+  const d=new V3().subVectors(p,PC).normalize(), r=groundR(d);       // vetor próprio: groundR usa os temporários _g*
   obj.position.copy(PC).addScaledVector(d, r-sink); obj.quaternion.setFromUnitVectors(Y_AXIS, d);
 }
 // referencial que acompanha a curvatura (transporte paralelo do "cima")
@@ -186,6 +186,7 @@ const DEPOSITS = {
   copper: { item:'ore_copper', name:'Minério de Cobre',    qty:[2,3] },
   crystal:{ item:'crystal',    name:'Cristal de Aurorita', qty:[1,2] },
   herbs:  { item:'herbs',      name:'Ervas Medicinais',    qty:[2,3] },
+  titanium:{ item:'ore_titanium', name:'Titânio Bruto',     qty:[1,2] },
 };
 const RESPAWN_MS = 20*60*1000;
 let wildMat = null;
@@ -210,7 +211,7 @@ function buildChunk(ci,cj){
   const put = (mat, geom, at, s=1, sy=s, yaw=rng()*6)=>{ _cq.setFromUnitVectors(Y_AXIS, at.d).multiply(_cqy.setFromAxisAngle(Y_AXIS,yaw));
     _cm.compose(at.p, _cq, _cs.set(s,sy,s)); geom.applyMatrix4(_cm); if(!lists.has(mat)) lists.set(mat,[]); lists.get(mat).push(geom.index?geom.toNonIndexed():geom); };
   const plan = { grass:{trees:22,rocks:6,bush:8,dep:[['herbs',.45],['iron',.3]]}, desert:{cactus:7,rocks:12,dep:[['copper',.5],['iron',.2]]},
-                 rock:{rocks:14,pines:6,dep:[['crystal',.45],['iron',.4]]}, snow:{rocks:9,dep:[['crystal',.55]]}, beach:{rocks:4,dep:[]} }[biome];
+                 rock:{rocks:14,pines:6,dep:[['crystal',.45],['iron',.4],['titanium',.15]]}, snow:{rocks:9,dep:[['crystal',.55],['titanium',.35]]}, beach:{rocks:4,dep:[]} }[biome];
   for(let k=0;k<(plan.trees||0);k++){ const a=chunkPlace(ci,cj,rng); if(!a||biomeOf(a.d,a.h)!=='grass') continue; const s=.8+rng()*.8;
     put(W.trunk, gCyl(.25,.35,4,5).translate(0,2,0), a, s); put(W.leaf[(rng()*3)|0], new THREE.IcosahedronGeometry(2.4,0).translate(0,5.4,0), a, s); }
   for(let k=0;k<(plan.pines||0);k++){ const a=chunkPlace(ci,cj,rng); if(!a) continue; const s=.8+rng()*.7;
@@ -240,6 +241,7 @@ function makeDeposit(type, rng){
   if(type==='crystal'){ for(let i=0;i<5;i++){ const h=1.2+rng()*1.8; const c=new THREE.Mesh(new THREE.ConeGeometry(.3,h,5),W.crystal); c.position.set(rng()*1.2-.6,h/2,rng()*1.2-.6); c.rotation.set(rng()*.5-.25,0,rng()*.5-.25); g.add(c); } }
   else if(type==='herbs'){ const b=new THREE.Mesh(new THREE.IcosahedronGeometry(.8,0),W.bush); b.scale.y=.6; b.position.y=.4; g.add(b);
     for(let i=0;i<7;i++){ const f=new THREE.Mesh(gBox(.15,.15,.15),W.flower); f.position.set(rng()*1.2-.6,.75+rng()*.2,rng()*1.2-.6); g.add(f); } }
+  else if(type==='titanium'){ for(let i=0;i<4;i++){ const r=new THREE.Mesh(new THREE.OctahedronGeometry(.6+rng()*.5,0), M(0xb8c0c8,{metalness:.8,roughness:.3})); r.position.set(rng()*1.4-.7,.45,rng()*1.4-.7); r.rotation.set(rng()*3,rng()*3,0); g.add(r); } }
   else { const cu=type==='copper'; for(let i=0;i<3;i++){ const r=new THREE.Mesh(new THREE.IcosahedronGeometry(.7+rng()*.5,0), cu?W.cu:W.ore); r.position.set(rng()*1.4-.7,.4,rng()*1.4-.7); g.add(r); }
     for(let i=0;i<8;i++){ const s=new THREE.Mesh(gBox(.18,.18,.18), cu?W.cuSpot:W.oreSpot); s.position.set(rng()*1.6-.8,.3+rng()*.7,rng()*1.6-.8); g.add(s); } }
   return g;
