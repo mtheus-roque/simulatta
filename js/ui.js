@@ -28,6 +28,9 @@ const PANELS = {
   contracts:{ title:'CONTRATOS E TRABALHO', key:'Q', tabs:{ bounty:'RECOMPENSAS', jobs:'EMPREGOS', orbit:'ÓRBITA' } },
   craft:    { title:'BANCADA DE FABRICAÇÃO', key:'E', tabs:{ ammo:'MUNIÇÃO', gear:'EQUIPAMENTO', ship:'NAVE', mat:'MATERIAIS' } },
   food:     { title:'COMIDA', key:'E', tabs:{} },
+  station:  { title:'ESTAÇÃO BETA — SERVIÇOS', key:'E', tabs:{ repair:'REPAROS', supply:'SUPRIMENTOS', sell:'VENDER' } },
+  nav:      { title:'NAVEGAÇÃO — MAPA ESTELAR', key:'E', tabs:{} },
+  remote:   { title:'CONTROLE DE CHAMADA', key:'K', tabs:{} },
   settings: { title:'CONFIGURAÇÕES', key:'Esc', tabs:{ audio:'ÁUDIO', controls:'CONTROLES', video:'VÍDEO', game:'JOGO' } },
 };
 const ui = { panel:null, tab:null, sel:null, filter:'ALL', ship:null };
@@ -46,7 +49,7 @@ function closePanel(){
   lock(); updateLockHint();
 }
 function togglePanel(name){ if(ui.panel===name) closePanel(); else openPanel(name); }
-const docked = () => mode==='hub' || mode==='city';      // naves: hangar ou apartamento
+const docked = () => mode==='hub' || mode==='city' || mode==='station';      // naves: hangar, apartamento ou estação
 const atHome = () => mode==='hub';                         // decoração: só no apartamento
 
 function renderPanel(){
@@ -55,7 +58,7 @@ function renderPanel(){
   document.getElementById('p-key').innerHTML = `<kbd>${P.key}</kbd> ou <kbd>Esc</kbd> fecha · ${CUR} ${state.credits}`;
   document.getElementById('p-tabs').innerHTML = Object.entries(P.tabs).map(([k,v])=>`<button class="btn ${k===ui.tab?'on':''}" data-a="tab" data-v="${k}">${v}</button>`).join('');
   const body = document.getElementById('p-body');
-  body.innerHTML = ({ inv:renderInv, shop:renderShop, contracts:renderContracts, settings:renderSettings, food:renderFood, craft:renderCraft })[ui.panel]();
+  body.innerHTML = ({ inv:renderInv, shop:renderShop, contracts:renderContracts, settings:renderSettings, food:renderFood, craft:renderCraft, station:renderStation, nav:renderNav, remote:renderRemote })[ui.panel]();
   if(ui.panel==='inv' && ui.tab==='garage'){ const sv=document.getElementById('shipview'); const pv=preview(); sv.appendChild(pv.r.domElement);
     pv.r.setSize(sv.clientWidth||290, sv.clientHeight||190, false); pv.c.aspect=(sv.clientWidth||290)/(sv.clientHeight||190); pv.c.updateProjectionMatrix();
     setPreview(ui.ship?.startsWith('v:') ? ui.ship : (state.ships.find(s=>s.uid===ui.ship)?.model||'kestrel')); }
@@ -172,7 +175,7 @@ function renderShop(){
     for(const [id,t] of Object.entries(TOOLS)) if(t.price)
       h += row(t.name, 'NÍVEL '+t.tier, `${t.desc} Velocidade ${t.speed}x, +${t.bonus} por coleta.`, CUR+t.price, buy('buy','t_'+id,t.price, qty('t_'+id)>0));
   if(ui.tab==='modules')
-    for(const [id,it] of Object.entries(ITEMS)) if(it.cat==='MÓDULO' && it.price)
+    for(const [id,it] of Object.entries(ITEMS)) if(it.cat==='MÓDULO' && it.price && (!it.orbital || mode==='station'))
       h += row(it.name, SLOTS[it.slot], `${it.desc} · no inventário: ${qty(id)}`, CUR+it.price, buy('buy',id,it.price,false));
   if(ui.tab==='ships')
     for(const [id,sd] of Object.entries(SHIPS)) if(sd.price)
@@ -183,9 +186,16 @@ function renderShop(){
   if(ui.tab==='furniture')
     for(const [id,it] of Object.entries(ITEMS)) if(it.cat==='MÓVEL' && it.price)
       h += row(it.name, 'MÓVEL', it.desc, CUR+it.price, buy('buy',id,it.price, qty(id)>0 || !!state.placed[id]));
-  if(ui.tab==='sell'){
+  if(ui.tab==='sell') h += renderSell();
+  return h;
+}
+function renderSell(){
+  let h='';
+  const row = (name, tag, desc, price, btn) => `<div class="item"><div><div>${name}${tag?`<span class="tag">${tag}</span>`:''}</div><div class="d">${desc}</div></div>
+    <div style="text-align:right"><div class="p">${price}</div>${btn}</div></div>`;
+  {
     const mk = marketHere();
-    if(!mk){ h += `<div class="empty">Vendas só acontecem em cidades. Vá a Nova Kessler ou a Porto Ferrugem.</div>`; return h; }
+    if(!mk){ h += `<div class="empty">Vendas só acontecem em cidades, postos avançados e na Estação Beta.</div>`; return h; }
     h += `<p class="d">Mercado de <b>${mk.name}</b> — os preços variam entre as cidades.</p>`;
     const sellables = Object.keys(state.inv).filter(id=>qty(id)>0 && (ITEMS[id].sell || (ITEMS[id].cat==='MÓDULO' && ITEMS[id].price)));
     if(!sellables.length) h += `<div class="empty">Nada para vender. Sucata, minérios, recursos e módulos não instalados aparecem aqui.</div>`;
@@ -196,6 +206,7 @@ function renderShop(){
   return h;
 }
 function marketHere(){
+  if(mode==='station') return STN_MARKET;
   if(mode==='hub') return SITES[0];
   if(mode==='city' && !city.fly) return siteAt(playerWorld(), 150);
   return null;
@@ -230,7 +241,7 @@ function renderBounties(){
   const b=state.bounty;
   let h = `<p class="d">Procurados pela Polícia de Aurora. Capture vivo (+25%) ou abata (60% da recompensa). Alvos rendidos podem ser algemados com <kbd>E</kbd>.</p>`;
   if(b) return h + `<div class="item"><div><div><b>${b.name}</b> ${'★'.repeat(b.danger)} <span class="p">${CUR}${b.reward}</span><span class="tag" style="color:var(--cyan)">EM CAÇA</span></div>
-    <div class="d">Procurado por ${b.crime}. Visto pela última vez a ${fmtKm(Math.max(0,bountyPos(b).distanceTo(playerWorld())))} daqui. Escolta: ${b.danger+1}.</div></div>
+    <div class="d">Procurado por ${b.crime}. Visto pela última vez ${bountyHere(b)?`a ${fmtKm(Math.max(0,bountyPos(b).distanceTo(playerWorld())))} daqui`:`em ${PLANETS[b.planet].name}`}. Escolta: ${b.danger+1}.</div></div>
     <button class="btn r" data-a="bab">ABANDONAR</button></div>`;
   for(const o of bountyOffers()) h += `<div class="item"><div><div><b>${o.name}</b> <span style="color:#ffd040">${'★'.repeat(o.danger)}</span> <span class="p">${CUR}${o.reward}</span></div>
     <div class="d">${o.species==='vexari'?'Vexari':o.species==='oskari'?'Oskari':'Humano'} · procurado por ${o.crime} · área a ${fmtKm(Math.acos(clamp(new V3().fromArray(o.d).dot((siteNow()||SITES[0]).up),-1,1))*PLANET.R)} de ${o.from.toLowerCase()}</div></div>
@@ -274,7 +285,7 @@ function renderSettings(){
       .map(([a,b])=>`<tr><td><kbd>${a}</kbd></td><td>${b}</td></tr>`).join('')}</table>`;
   if(ui.tab==='video') h = range('scale','Escala de resolução',.5,1,.05,pct)+range('fov','Campo de visão (FOV)',55,95,1,v=>v+'°')+
     check('crt','Filtro CRT retrô');
-  if(ui.tab==='game') h = `<div class="item"><div>Salvar progresso<div class="d">O jogo salva automaticamente a cada ação.</div></div><button class="btn g" data-a="savenow">SALVAR AGORA</button></div>
+  if(ui.tab==='game') h = check('testMode','Modo de teste — créditos e Células de Salto infinitos') + `<div class="item"><div>Salvar progresso<div class="d">O jogo salva automaticamente a cada ação.</div></div><button class="btn g" data-a="savenow">SALVAR AGORA</button></div>
     <div class="item"><div>Restaurar configurações padrão</div><button class="btn" data-a="resetset">RESTAURAR</button></div>
     <div class="item"><div>Apagar progresso<div class="d">Créditos, inventário, naves e móveis voltam ao início.</div></div><button class="btn r" data-a="reset">APAGAR SAVE</button></div>`;
   return h + `<p style="margin-top:18px"><button class="btn g" data-a="close">▶ CONTINUAR</button></p>`;
@@ -317,6 +328,9 @@ panelEl.addEventListener('click', e=>{
       if(city.player) syncCityVehicles(); sfx.coin();
       toast(`${vd.name} estacionado em frente à Torre Kessler 07`, '#7dff9a'); break; }
     case 'veh': ui.ship='v:'+v; sfx.ui(); break;
+    case 'repair': repairShip(v); break;
+    case 'summon': return summon(v);
+    case 'jump': return jumpTo(v);
     case 'buyammo': { const a=AMMO_PACKS[v]; if(state.credits<a.price) break; state.credits-=a.price; addItem(v,a.n); sfx.coin(); toast(`+${a.n} ${ITEMS[v].name}`, '#7dff9a'); updateWeaponHUD(); break; }
     case 'equipw': state.weapon=v; sfx.ui(); updateWeaponHUD(); break;
     case 'craft': craft(v); break;

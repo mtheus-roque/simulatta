@@ -219,6 +219,7 @@ function enemyShoot(e, eye, chest, d){
 const GANG_TURFS = [ { x:-98, z:46 }, { x:118, z:-98 }, { x:46, z:118 } ];
 function initTurfs(){ combat.turfs = GANG_TURFS.map((t,i)=>({ ...t, i, spawned:false, ents:[], inT:0, warned:false })); }
 function updateTurfs(dt, P){
+  if(CUR_P.id!=='aurora') return;                       // gangues só em Porto Ferrugem
   const s=SITES[1], far=s.center.distanceTo(P)>1500;
   if(far){ combat.hostile.ratos=false; }
   for(const tf of combat.turfs){
@@ -240,14 +241,14 @@ function updateTurfs(dt, P){
 // ---------------------------------------------------------------- acampamentos de bandidos nas áreas selvagens
 const CAMP_RESPAWN = 30*60*1000;
 function initCamps(){
-  const rng=seeded(777), d=new V3();
-  for(let k=0;k<18;k++){
+  const C=CUR_P.camps, rng=seeded(C.seed), d=new V3(), pre=CUR_P.id==='aurora'?'':CUR_P.id+':';
+  for(let k=0;k<C.n;k++){
     for(let tries=0;tries<60;tries++){
       d.set(rng()*2-1,rng()*2-1,rng()*2-1).normalize();
-      if(k<6){ d.copy(SITES[k%2].up).addScaledVector(_c1.set(rng()*2-1,rng()*2-1,rng()*2-1),.25).normalize(); }   // alguns perto das cidades
-      const r=groundR(d); if(r<PLANET.R+PLANET.SEA+8) continue;
-      if(SITES.some(s=>Math.acos(clamp(d.dot(s.up),-1,1))*PLANET.R < 4500)) continue;
-      combat.camps.push({ id:'camp'+k, d:d.clone(), pos:PC.clone().addScaledVector(d,r), g:null, ents:[], spawned:false, crate:false });
+      if(k<6){ d.copy(SITES[k%SITES.length].up).addScaledVector(_c1.set(rng()*2-1,rng()*2-1,rng()*2-1),.25).normalize(); }   // alguns perto das cidades
+      const r=groundR(d); if(r<seaR()+8) continue;
+      if(SITES.some(s=>Math.acos(clamp(d.dot(s.up),-1,1))*PLANET.R < Math.min(4500, PLANET.R*.15))) continue;
+      combat.camps.push({ id:pre+'camp'+k, d:d.clone(), pos:PC.clone().addScaledVector(d,r), g:null, ents:[], spawned:false, crate:false });
       break;
     }
   }
@@ -268,7 +269,7 @@ function updateCamps(P){
     if(d<330 && !cleared && !c.spawned && !city.fly){ c.spawned=true; c.ents=[];
       const ws=['rifle','pistol','melee','shotgun'], n=3+((c.id.length+Math.floor(c.pos.x))%2);
       for(let k=0;k<n;k++){ const off=_c1.set(rand(-9,9),0,rand(-9,9)).applyQuaternion(c.g?c.g.quaternion:_cqk.identity());
-        c.ents.push(spawnEnemy(c.pos.clone().add(off), { style:'bandit', faction:c.id, weapon:ws[k%4], hp:75, hostile:true, aggro:45, species:['human','oskari','human','vexari'][k%4], owner:'camp' })); }
+        c.ents.push(spawnEnemy(c.pos.clone().add(off), { style:'bandit', faction:c.id, weapon:ws[k%4], hp:CUR_P.camps.hp, hostile:true, aggro:45, species:['human','oskari','human','vexari'][k%4], owner:'camp' })); }
       if(!combat.campNote[c.id]){ combat.campNote[c.id]=true; toast('Acampamento de bandidos à vista!', '#ff6a5a'); }
     }
     if(c.spawned && d>800){ c.ents.forEach(removeEnemy); c.ents=[]; c.spawned=false; }
@@ -302,12 +303,12 @@ function openCrate(c){
 let weaponKey='';
 function updateWeaponHUD(){
   const el=document.getElementById('weapon'), show = mode==='city' && !city.drive && !city.fly && !city.launch;
-  const [id,w]=curWeapon(), tool=TOOLS[bestTool()];
-  const key=[show,id,clipOf(id),w.ammo?qty(w.ammo):0,combat.reloadT>0,tool.name].join();
+  const [id,w]=curWeapon();
+  const key=[show,id,clipOf(id),w.ammo?qty(w.ammo):0,combat.reloadT>0].join();
   if(key===weaponKey) return; weaponKey=key;
   el.style.display = show ? 'block' : 'none';
   el.innerHTML = `<div class="wn">${w.name}</div>` + (w.melee ? `<div class="wa">corpo a corpo</div>` :
-    `<div class="wa">${combat.reloadT>0?'RECARREGANDO…':`<b>${clipOf(id)}</b> / ${qty(w.ammo)}`}</div>`) + `<div class="wt">⚒ ${tool.name}</div>`;
+    `<div class="wa">${combat.reloadT>0?'RECARREGANDO…':`<b>${clipOf(id)}</b> / ${qty(w.ammo)}`}</div>`);
 }
 function updateCombat(dt, t){
   if(mode!=='city') return;

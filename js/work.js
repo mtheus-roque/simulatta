@@ -3,7 +3,7 @@
    quadro de recompensas (caça a procurados) e empregos civis (entregas, táxi e manutenção urbana). */
 
 const work = { job:null, mini:null, bTarget:null, bEscorts:[] };
-const DEP_TIER = { herbs:0, iron:1, copper:1, crystal:2, titanium:3 };
+const DEP_TIER = { herbs:0, iron:1, copper:1, crystal:2, titanium:3, magmatite:2, cryonite:3 };
 const _w1=new V3(), _w2=new V3();
 function bestTool(){ for(const id of ['laser','drill','pick']) if(qty('t_'+id)>0) return id; return 'hands'; }
 const toolForTier = t => Object.values(TOOLS).find(x=>x.tier===t).name;
@@ -59,11 +59,11 @@ function bountyOffers(){
   for(let k=0;k<3;k++){
     const [name,sp]=BOUNTY_NAMES[(rng()*BOUNTY_NAMES.length)|0], danger=1+((rng()*3)|0);
     let d=null;
-    for(let t=0;t<40 && !d;t++){ const c=offsetDir(site.up, rng()*Math.PI*2, 4500+rng()*(5000+danger*4000)); if(groundR(c)>PLANET.R+PLANET.SEA+8) d=c; }
+    for(let t=0;t<40 && !d;t++){ const c=offsetDir(site.up, rng()*Math.PI*2, 4500+rng()*(5000+danger*4000)); if(groundR(c)>seaR()+8) d=c; }
     if(!d) continue;
     const hint=offsetDir(d, rng()*Math.PI*2, rng()*220);
     list.push({ id:`b${state.bountySeed}_${idx}_${k}`, name, species:sp, danger, crime:BOUNTY_CRIMES[(rng()*BOUNTY_CRIMES.length)|0],
-      reward:Math.round((380+danger*400+rng()*250)/10)*10, d:d.toArray(), hint:hint.toArray(), from:site.name });
+      reward:Math.round((380+danger*400+rng()*250)*(CUR_P.bountyMul||1)/10)*10, d:d.toArray(), hint:hint.toArray(), from:site.name, planet:CUR_P.id });
   }
   return list;
 }
@@ -71,8 +71,9 @@ function acceptBounty(o){ if(state.bounty){ toast('Você já está caçando um a
 function abandonBounty(){ despawnBounty(); state.bounty=null; save(); sfx.ui(); }
 function despawnBounty(){ if(work.bTarget) removeEnemy(work.bTarget); work.bEscorts.forEach(removeEnemy); work.bTarget=null; work.bEscorts=[]; }
 function bountyPos(b){ const d=new V3().fromArray(b.d); return PC.clone().addScaledVector(d, groundR(d)); }
+const bountyHere = b => !b.planet || b.planet===CUR_P.id;
 function updateBounty(P){
-  const b=state.bounty; if(!b || mode!=='city') return;
+  const b=state.bounty; if(!b || mode!=='city' || !bountyHere(b)) return;
   const pos=bountyPos(b), d=pos.distanceTo(P);
   if(!work.bTarget && d<420 && !city.fly){
     const ws=['pistol','rifle','shotgun'];
@@ -104,7 +105,7 @@ function sidewalkPoint(s){
 function pointNear(s, from, dmin, dmax, gen){ let best=null; for(let k=0;k<80;k++){ const p=gen(); const d=Math.hypot(p.x-from.x,p.z-from.z); if(d>=dmin && d<=dmax) return p; if(!best) best=p; } return best; }
 function startJob(type){
   const s=siteNow();
-  if(!s || mode!=='city'){ toast('Empregos ficam nas cidades — vá até a rua', '#ff4a4a'); return; }
+  if(!s || mode!=='city' || s.outpost){ toast('Empregos ficam nas cidades de Aurora — vá até a rua', '#ff4a4a'); return; }
   if(work.job){ toast('Você já está em um emprego — termine ou abandone', '#ff4a4a'); return; }
   const PL=toLocal(s,playerWorld(),new V3());
   if(type==='delivery'){
@@ -200,7 +201,7 @@ function currentObjective(){
     const p=j.panels.find(x=>!x.done); if(p) return { pos:toWorld(j.s,_w2.set(p.p.x,1,p.p.z),new V3()), label:'PAINEL' };
   }
   const b=state.bounty;
-  if(b){ if(work.bTarget && work.bTarget.state!=='dead') return { pos:work.bTarget.g.position.clone(), label:b.name.toUpperCase() };
+  if(b && bountyHere(b)){ if(work.bTarget && work.bTarget.state!=='dead') return { pos:work.bTarget.g.position.clone(), label:b.name.toUpperCase() };
     const d=new V3().fromArray(b.hint); return { pos:PC.clone().addScaledVector(d,groundR(d)+40), label:'ÁREA DO ALVO' }; }
   return null;
 }

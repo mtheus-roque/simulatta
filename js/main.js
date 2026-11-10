@@ -8,8 +8,8 @@ function hudFor(m){
   ['flightstats','crosshair','aim','mk-gate','mk-station','mk-home','mk-hangar','mk-obj','loc','minimap','alt','center','minebar']
     .forEach(id=>document.getElementById(id).style.display = on.includes(id) ? 'block' : 'none');
   document.getElementById('mk-station').style.color='';
-  droneMk.forEach(m=>m.style.display='none');
-  vitalsKey=''; weaponKey='';
+  droneMk.forEach(m=>m.style.display='none'); bodyMk.forEach(m=>m.style.display='none');
+  vitalsKey=''; weaponKey=''; hotbarKey='';
   if(m!=='city'){ document.getElementById('weapon').style.display='none'; combat.aiming=false; combat.firing=false; }
 }
 function enterHub(){
@@ -29,7 +29,7 @@ function goHub(){ sfx.door(); transition(()=>{ enterHub(); toast('Apartamento 07
 function reachOrbit(){
   endLaunch(); city.fly=null; engineStop();
   mode='flight'; resetFlight(); hudFor('flight'); updateHUD();
-  toast(`Órbita alcançada · ${SHIPS[activeShip().model].name} · Setor Kessler`, '#5ef2ff');
+  toast(`Órbita alcançada · ${SHIPS[activeShip().model].name} · ${CUR_P.orbit.sector}`, '#5ef2ff');
 }
 
 // ================================================================ INPUT
@@ -46,10 +46,11 @@ document.addEventListener('pointerlockchange', ()=>{
     if(!ui.panel && mode!=='title' && !transitioning) openPanel('settings'); }   // Esc solta o mouse -> abre configurações
   updateLockHint();
 });
-function pitchLimits(){ return settings.fp ? [-1.3,1.3] : mode==='city' && city.drive ? [-.2,.9] : [-.35,1.2]; }
+function pitchLimits(){ return settings.fp ? [-1.3,1.3] : mode==='city' && city.drive ? [-.2,.9] : [-1.45,1.2]; }   // a pé em 3ª pessoa: olhar quase na vertical
 function look(dx, dy){
   const s = settings.sens*.0022, inv = settings.invertY?-1:1, [lo,hi]=pitchLimits();
   if(mode==='hub'){ hub.yaw -= dx*s; hub.pitch = clamp(hub.pitch + dy*s*inv, lo, hi); }
+  else if(mode==='station'){ stn.yaw -= dx*s; stn.pitch = clamp(stn.pitch + dy*s*inv, lo, hi); }
   else if(mode==='city' && !city.launch){
     if(city.fly){ city.fly.aimYaw -= dx*s*.8; city.fly.aimPitch -= dy*s*.8*inv; return; }
     if(city.drive){ city.camOff -= dx*s; city.lookT = 1.2; } else city.yaw -= dx*s;
@@ -80,12 +81,13 @@ addEventListener('keydown', e=>{
   if(e.code==='KeyI') return togglePanel('inv');
   if(e.code==='KeyP') return togglePanel('shop');
   if(e.code==='KeyQ') return togglePanel('contracts');
+  if(e.code==='KeyK') return togglePanel('remote');                // controle de chamada
   if(ui.panel) return;
   if(e.code==='KeyV'){
     settings.fp = !settings.fp; saveSettings(); sfx.ui();
     const [lo,hi]=pitchLimits();
-    if(settings.fp){ hub.pitch=0; city.pitch=0; }
-    else { hub.pitch=clamp(Math.max(hub.pitch,.15),lo,hi); city.pitch=clamp(Math.max(city.pitch,.15),lo,hi); }
+    if(settings.fp){ hub.pitch=0; city.pitch=0; stn.pitch=0; }
+    else { hub.pitch=clamp(Math.max(hub.pitch,.15),lo,hi); city.pitch=clamp(Math.max(city.pitch,.15),lo,hi); stn.pitch=clamp(Math.max(stn.pitch,.15),lo,hi); }
     toast(settings.fp ? 'Visão em 1ª pessoa' : 'Visão em 3ª pessoa', '#5ef2ff');
     return;
   }
@@ -94,8 +96,12 @@ addEventListener('keydown', e=>{
     if(e.code==='KeyG') hubCarry();
     if(e.code==='KeyR' && hub.carry){ hub.carryRot += Math.PI/4; sfx.ui(); }
   }
+  if(mode==='station' && e.code==='KeyE') stationInteract();
+  if(mode==='flight' && e.code==='KeyE' && !fl.dead) flightInteract();   // atracar na estação ou descer ao planeta
+  if(mode==='flight' && e.code==='KeyJ') startHyperjump();                // hipersalto até o alvo em foco
+  if(mode==='flight' && e.code==='KeyT') cycleFocus();
   if(mode==='city' && work.mini && miniKey(e.code)) return;      // minijogo de manutenção (setas)
-  if(mode==='city' || mode==='hub'){ const n=['Digit1','Digit2','Digit3','Digit4'].indexOf(e.code); if(n>=0) return selectWeapon(n+1); }
+  if(mode==='city' || mode==='hub' || mode==='station'){ const n=['Digit1','Digit2','Digit3','Digit4'].indexOf(e.code); if(n>=0) return selectWeapon(n+1); }
   if(mode==='city'){
     if(e.code==='KeyR') reloadWeapon();
     if(e.code==='KeyC') dodge();
@@ -108,16 +114,24 @@ addEventListener('keyup', e=>{ keys[e.code]=false; });
 addEventListener('blur', keysReset);
 addEventListener('resize', ()=>{
   renderer.setSize(innerWidth, innerHeight);
-  [hub.cam, fl.cam, city.cam].forEach(c=>{ c.aspect=innerWidth/innerHeight; c.updateProjectionMatrix(); });
+  [hub.cam, fl.cam, city.cam, stn.cam].forEach(c=>{ c.aspect=innerWidth/innerHeight; c.updateProjectionMatrix(); });
 });
 function start(){
   initAudio(); if(actx && actx.state==='suspended') actx.resume();
   document.getElementById('title').style.display='none'; document.getElementById('hud').style.display='block';
+  if(state.shipLoc && state.shipLoc!=='aurora'){ state.ship=null; state.shipLoc='aurora'; save(); setTimeout(()=>toast('Sua nave foi rebocada ao Hangar 07 enquanto você estava fora', '#ffb347'), 1500); }
   enterHub(); hub.player.position.set(0,0,2.5); hub.player.rotation.y=Math.PI; hub.yaw=0; hub.pitch=settings.fp?0:.3;
   toast(state.completed||state.kills ? 'Bem-vindo de volta, piloto.' : 'Apartamento 07, Torre Kessler. O elevador leva à rua — e ao planeta inteiro.', '#ffb347');
   lock(); updateLockHint();
 }
 document.getElementById('start').addEventListener('click', start);
+
+// modo de teste: créditos e Células de Salto sempre no máximo (Configurações › JOGO)
+function testModeTick(){
+  if(!settings.testMode || mode==='title') return;
+  if(state.credits<999999){ state.credits=999999; updateHUD(); }
+  if(qty('jumpcell')<99) state.inv.jumpcell=99;
+}
 
 // ================================================================ LOOP
 buildHub(); buildFlight(); buildCity(); initCombat(); applySettings(); updateHUD();
@@ -126,13 +140,15 @@ const clock = new THREE.Clock(); let T=0;
   requestAnimationFrame(loop);
   const dt = Math.min(clock.getDelta(), .05); T+=dt;
   if(centerT>0){ centerT-=dt; if(centerT<=0) document.getElementById('center').style.display='none'; }
-  updateSurvival(dt,T);
+  updateSurvival(dt,T); updateHotbar(); testModeTick();
   if(mode==='flight'){
     if(!ui.panel) updateFlight(dt,T);          // painéis pausam o voo orbital
     renderer.render(fl.scene, fl.cam);
   } else if(mode==='city'){
     updateCity(dt,T);
     renderer.render(city.scene, city.cam);
+  } else if(mode==='station'){
+    updateStation(dt,T); renderer.render(stn.scene, stn.cam);
   } else {
     if(mode==='hub') updateHub(dt,T);
     else { const a=T*.12; hub.cam.position.set(Math.sin(a)*5, 2.6, 2+Math.cos(a)*2); hub.cam.lookAt(0,1.3,-2); animateHubScreens(T); }

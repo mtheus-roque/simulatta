@@ -10,6 +10,13 @@ Você começa no Apartamento 07 da Torre Kessler, em Nova Kessler, no planeta **
 
 Da órbita (tecla **O** durante o voo) chega-se aos contratos, aos drones piratas e à Estação Beta.
 
+### Estação Beta e outros planetas
+
+- **Estação Beta** (órbita de Aurora): aproxime-se devagar da baía de atracação e aperte **E**. Lá dentro dá para andar pelo hangar, pelo corredor e pela promenade. Os serviços são: reparo de casco (o dano em órbita continua na nave), oficina de módulos, mercado orbital (Células de Salto e módulos exclusivos, e paga mais por minérios), contratos, cantina, refino e o **terminal de navegação**.
+- **Saltos**: pelo terminal de navegação, gastando Células de Salto, você vai para **Cinzar** (vulcânico, Mid-Sec, Magmatita) ou **Híalis** (lua gelada, Null-Sec, Criônio). Cada um tem um posto avançado com mercador, cantina, armeiro, refinaria e plataformas de pouso. A baliza roxa na órbita traz você de volta à Estação Beta.
+- **Hipersalto**: em voo, mire num planeta, hangar ou na estação (ou percorra os alvos com **T**) e aperte **J**. Para outro planeta, o salto leva à órbita baixa sobre o hangar principal e custa as mesmas Células de Salto. Sobre um hangar, pousa direto. **Shift** ativa o pós-combustor.
+- **Descida direta**: em órbita baixa, aperte **E**. Sobre um hangar marcado (Hangar 07, Doca 07 ou um posto), a nave pousa na plataforma. Fora deles, pousa no solo logo abaixo. Os planetas do sistema e os hangares aparecem marcados no espaço.
+
 ## Como jogar
 
 Opção 1: abra `index.html` direto no navegador (Chrome ou Edge).
@@ -28,11 +35,13 @@ node tools/serve.js
 | Espaço | Pular (a pé) / freio (carro e nave) |
 | Clique | Atirar / golpear (segure para golpe forte) / atirar (órbita) |
 | Botão direito | Mirar por cima do ombro |
-| 1 – 4 | Trocar arma (1 corpo a corpo, 2 pistola, 3 espingarda, 4 fuzil) |
+| 1 – 4 / roda do mouse | Trocar arma (1 corpo a corpo, 2 pistola, 3 espingarda, 4 fuzil) — a barra de itens embaixo mostra o que você carrega |
 | R | Recarregar |
+| K | Controle de chamada: traz sua nave (pouso automático) ou seu carro até você |
+| J / T | Em órbita: hipersalto até o alvo em foco / trocar o alvo |
 | C | Esquiva (gasta energia, invulnerável por um instante) |
 | Setas | Minijogo de manutenção de painéis |
-| E | Interagir, comer, coletar (e acertar o ponto quente), dirigir, embarcar, pousar, algemar e revistar |
+| E | Interagir, comer, coletar (e acertar o ponto quente), dirigir, embarcar, pousar, algemar e revistar · em órbita: atracar na estação ou descer ao planeta |
 | O | Subir da atmosfera para a órbita |
 | Enter | Pular a subida à órbita |
 | V | Alternar 1ª / 3ª pessoa |

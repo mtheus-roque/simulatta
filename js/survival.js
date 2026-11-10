@@ -34,13 +34,13 @@ function playerDown(){
   surv.downing=true; state.stats.hp=0;
   const fee = Math.min(state.credits, Math.max(20, Math.round(state.credits*.1)));
   state.credits -= fee; clearWanted(); save(); updateHUD();
-  setCenter(`VOCÊ DESMAIOU<br><span style="font-size:24px;color:#ffb347">Levado à Clínica de Nova Kessler · −${CUR}${fee}</span>`, 3);
+  setCenter(`VOCÊ DESMAIOU<br><span style="font-size:24px;color:#ffb347">Levado à ${CUR_P.id==='aurora'?'Clínica de Nova Kessler':'enfermaria de '+SITES[0].name} · −${CUR}${fee}</span>`, 3);
   setTimeout(()=>transition(()=>{ state.stats.hp=60; state.stats.food=Math.max(state.stats.food,40); enterCity('home'); surv.downing=false; updateVitals(); }), 2000);
 }
 
 // ---------------------------------------------------------------- crimes e procurado
 function crime(level, why){
-  const P = playerWorld(), s = siteAt(P, 300); if(!s) return;
+  const P = playerWorld(), s = siteAt(P, 300); if(!s || s.outpost) return;     // postos avançados: sem polícia
   if(surv.crimeCd>0 && level<2) return; surv.crimeCd=.8;
   const before=surv.wanted; surv.wanted=Math.min(3, surv.wanted+level); surv.site=s; surv.escapeT=0;
   toast(`CRIME: ${why}  ${'★'.repeat(surv.wanted)}`, '#ff4a4a');
@@ -185,7 +185,7 @@ function updateVitals(){
   set('v-hp',S.hp); set('v-st',surv.st); set('v-food',S.food);
   document.getElementById('v-st').classList.toggle('boost', surv.boost>0);
   document.getElementById('v-food').classList.toggle('low', S.food<25);
-  document.getElementById('vitals').style.display = (mode==='city' || mode==='hub') ? 'block' : 'none';
+  document.getElementById('vitals').style.display = (mode==='city' || mode==='hub' || mode==='station') ? 'block' : 'none';
   const w=document.getElementById('wanted');
   w.style.display = surv.wanted>0 ? 'block' : 'none';
   w.innerHTML = 'PROCURADO ' + '<b>★</b>'.repeat(surv.wanted) + '<span>★</span>'.repeat(3-surv.wanted);

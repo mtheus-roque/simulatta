@@ -23,11 +23,17 @@ const ITEMS = {
   crystal:      { name:'Cristal de Aurorita',  cat:'MINÉRIO', sell:65, desc:'Cristal luminoso das montanhas e geleiras. Porto Ferrugem paga mais.' },
   herbs:        { name:'Ervas Medicinais',     cat:'RECURSO', sell:14, use:{ hp:15, food:3 }, desc:'Folhas roxas das planícies. Fecham cortes — podem ser consumidas.' },
   ore_titanium: { name:'Titânio Bruto',        cat:'MINÉRIO', sell:110, desc:'Metal raro dos picos gelados. Exige Laser de Mineração.' },
+  ore_magma:    { name:'Magmatita',            cat:'MINÉRIO', sell:90,  desc:'Rocha ainda morna das escarpas de Cinzar. Combustível de células de salto.' },
+  ore_cryo:     { name:'Criônio',              cat:'MINÉRIO', sell:165, desc:'Cristal supercondutor das geleiras de Híalis. Exige Laser de Mineração.' },
+  jumpcell:     { name:'Célula de Salto',      cat:'MATERIAL', price:60, sell:25, desc:'Carga de plasma para o motor de salto. Vendida na Estação Beta ou fabricada com Magmatita.' },
+  engine_t2:    { name:'Motor de Plasma T2',   cat:'MÓDULO', slot:'engine', price:1400, orbital:true, desc:'Velocidade máxima +80%. Só na Estação Beta.', mod:{speed:1.8} },
+  armor_t2:     { name:'Blindagem de Criônio', cat:'MÓDULO', slot:'armor',  price:1600, orbital:true, desc:'Casco +150. Só na Estação Beta.', mod:{hull:150} },
   alloy:        { name:'Liga de Titânio',      cat:'MATERIAL', sell:330, desc:'Lingote refinado na bancada. Vale muito mais que o minério.' },
   // munição (cada unidade = 1 disparo)
   ammo_p: { name:'Munição .45 Pesada',   cat:'MUNIÇÃO', desc:'Para a Pistola Pesada.' },
   ammo_s: { name:'Cartucho Cinético',    cat:'MUNIÇÃO', desc:'Para a Espingarda Cinética.' },
   ammo_r: { name:'Célula de Pulso',      cat:'MUNIÇÃO', desc:'Para o Fuzil de Pulso.' },
+  remote: { name:'Controle de Chamada',  cat:'EQUIPAMENTO', desc:'Chaveiro com piloto remoto: chama sua nave ou seu carro até perto de você. Tecla K.' },
   vest:   { name:'Colete Balístico',     cat:'EQUIPAMENTO', price:380, desc:'Placas de liga sob o casaco. Reduz 35% do dano recebido.' },
 };
 // armas de mão — dmg por projétil; rate = segundos entre disparos/golpes
@@ -63,6 +69,9 @@ const RECIPES = [
   { id:'r_engine', tab:'ship', out:{ engine_t1:1 },   in:{ ore_copper:4, crystal:3, ore_titanium:2 } },
   { id:'r_armor',  tab:'ship', out:{ armor_scrap:1 }, in:{ ore_iron:6, scrap:6 } },
   { id:'r_alloy',  tab:'mat',  out:{ alloy:1 },       in:{ ore_titanium:2, ore_iron:2 } },
+  { id:'r_cell',   tab:'mat',  out:{ jumpcell:2 },    in:{ ore_magma:2, crystal:1 } },
+  { id:'r_engine2',tab:'ship', out:{ engine_t2:1 },   in:{ ore_magma:4, ore_cryo:2, alloy:1 } },
+  { id:'r_armor2', tab:'ship', out:{ armor_t2:1 },    in:{ ore_cryo:3, alloy:2, scrap:6 } },
 ];
 // recompensas (caça a procurados) e empregos civis
 const BOUNTY_NAMES = [ ['Dex "Trava" Morrow','human'], ['Kaela Voss','vexari'], ['Brokk, o Rachado','oskari'], ['Ivo Lâmina','human'], ['Sena Okonkwo','human'],
@@ -118,8 +127,9 @@ function defaultState(){
 function load(key, def){ try{ const r=localStorage.getItem(key); if(r) return Object.assign(def, JSON.parse(r)); }catch(e){} return def; }
 let state = load(SAVE_KEY, defaultState());
 if(!state.kitV3){ state.kitV3=true; state.inv.w_pistol=1; state.inv.ammo_p=(state.inv.ammo_p||0)+24; state.inv.t_pick=1; }   // kit inicial: pistola, munição e picareta
+if(!state.kitRemote){ state.kitRemote=true; state.inv.remote=1; }                                                                 // controle de chamada para todos
 function save(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(state)); }catch(e){} }
-const DEFAULT_SETTINGS = { fp:false, master:.8, music:.7, sfx:.8, sens:1, invertY:false, scale:1, fov:72, crt:false };
+const DEFAULT_SETTINGS = { testMode:true, fp:false, master:.8, music:.7, sfx:.8, sens:1, invertY:false, scale:1, fov:72, crt:false };
 let settings = load(SET_KEY, Object.assign({}, DEFAULT_SETTINGS));
 function saveSettings(){ try{ localStorage.setItem(SET_KEY, JSON.stringify(settings)); }catch(e){} }
 

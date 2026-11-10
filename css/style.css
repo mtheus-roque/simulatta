@@ -29,7 +29,7 @@
   #flightstats{display:none}
   #contract{position:absolute;top:14px;right:14px;max-width:330px;text-align:right}
   #contract b{color:var(--cyan)}
-  #prompt{position:absolute;bottom:70px;left:50%;transform:translateX(-50%);font-size:26px;
+  #prompt{position:absolute;bottom:118px;left:50%;transform:translateX(-50%);font-size:26px;
     color:var(--cyan);text-shadow:0 0 8px var(--cyan);white-space:nowrap}
   kbd{color:var(--amber);border:1px solid var(--amber-dim);padding:0 4px;margin:0 2px;font-family:inherit}
   #toasts{position:absolute;top:70px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px}
@@ -132,11 +132,10 @@
   #weapon{position:absolute;right:210px;bottom:14px;min-width:190px;display:none;text-align:right;font-size:17px}
   #weapon .wn{font-size:21px;color:#fff}
   #weapon .wa{font-size:24px} #weapon .wa b{color:var(--amber);font-size:30px}
-  #weapon .wt{color:var(--muted);font-size:15px}
   #crosshair.aim{width:16px;height:16px;margin:-8px 0 0 -8px}
   #crosshair.aim::after{left:6px;top:6px}
   #crosshair.hit{border-color:#ff4a4a;box-shadow:0 0 10px #ff4a4a}
-  #minebar{position:absolute;left:50%;bottom:110px;transform:translateX(-50%);width:min(420px,90vw);display:none;text-align:center}
+  #minebar{position:absolute;left:50%;bottom:160px;transform:translateX(-50%);width:min(420px,90vw);display:none;text-align:center}
   #minebar .ml{font-size:19px;margin-bottom:6px} #minebar .ml b{color:var(--green)}
   #minebar .mt{position:relative;height:18px;border:1px solid var(--amber-dim);background:rgba(0,0,0,.5)}
   #minebar .mz{position:absolute;top:0;bottom:0;background:rgba(125,255,154,.45)}
@@ -146,3 +145,27 @@
   #minebar .seq{font-size:40px;letter-spacing:12px} #minebar .seq span{color:#5a4a30} #minebar .seq .ok{color:var(--green)} #minebar .seq .cur{color:#fff;text-shadow:0 0 10px #fff}
   #mk-obj{color:#ffd040}
   .trk{margin-top:4px} .trk+.trk{border-top:1px dashed #4a3418;padding-top:4px} .trk span{display:block;font-size:14px;color:var(--muted)}
+
+  /* barra de itens (hotbar) */
+  #hotbar{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);display:none;gap:6px;align-items:stretch;
+    padding:6px;background:rgba(10,7,4,.72);border:1px solid var(--amber-dim);box-shadow:0 0 14px rgba(255,179,71,.12)}
+  #hotbar .hs{position:relative;width:96px;height:78px;border:1px solid #4a3418;background:rgba(0,0,0,.45);
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:3px 3px 4px;line-height:1;transition:border-color .12s,background .12s,transform .12s}
+  #hotbar .hs kbd{position:absolute;top:2px;left:3px;margin:0;padding:0 3px;font-size:14px;border-color:#5a4020}
+  #hotbar .hs .hm{position:absolute;top:3px;right:4px;font-size:13px;color:var(--muted)}
+  #hotbar .hi{width:30px;height:30px;color:var(--amber);margin-bottom:3px} #hotbar .hi svg{width:100%;height:100%;display:block}
+  #hotbar .hn{font-size:13px;color:#e8d2a8;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  #hotbar .ha{font-size:14px;color:var(--muted);margin-top:2px;white-space:nowrap} #hotbar .ha b{color:#fff;font-weight:normal}
+  #hotbar .ha b.out{color:var(--red)} #hotbar .ha .rl{color:var(--cyan);animation:blink .6s steps(2) infinite}
+  #hotbar .hs.on{border-color:var(--amber);background:rgba(255,179,71,.14);box-shadow:0 0 10px rgba(255,179,71,.45),inset 0 0 10px rgba(255,179,71,.15);transform:translateY(-4px)}
+  #hotbar .hs.on .hi{filter:drop-shadow(0 0 4px var(--amber))} #hotbar .hs.on kbd{color:#000;background:var(--amber)}
+  #hotbar .hs.empty{opacity:.35} #hotbar .hs.empty .hi{color:#6a5030}
+  #hotbar .hs.tool{border-color:#1f4a50} #hotbar .hs.tool .hi{color:var(--cyan)} #hotbar .hs.tool kbd{color:var(--cyan);border-color:#1f4a50}
+  #hotbar .sep{width:1px;background:var(--amber-dim);margin:6px 2px;opacity:.6}
+  @media (max-width:1100px){
+    #hotbar{gap:4px;padding:4px} #hotbar .hs{width:58px;height:60px} #hotbar .hn{display:none} #hotbar .hi{width:26px;height:26px} #hotbar .ha{font-size:12px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+    #weapon{right:14px;bottom:auto;top:160px} #prompt{bottom:96px;font-size:22px}
+  }
+  @media (max-width:760px){ #vitals{bottom:96px} #prompt{bottom:180px;white-space:normal;text-align:center;width:90vw} }
+  .mk.planetmk{color:#e0c8ff;font-size:15px;text-shadow:0 0 6px #8a5aff}
+  .mk.planetmk.focus{color:#ffd040;text-shadow:0 0 10px #ffd040;font-size:17px;z-index:2}

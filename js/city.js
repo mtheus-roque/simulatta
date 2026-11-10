@@ -213,7 +213,7 @@ function buildCity(){
   outerTex.wrapS=outerTex.wrapT=THREE.RepeatWrapping; city.outerTex=outerTex;
 
   buildSky(s); buildPlanet(s); buildClouds(s);
-  for(const site of SITES) buildSite(site);
+  for(const site of SITES) buildSite(site);                 // Aurora; postos dos outros planetas são montados ao chegar (setPlanet)
   city.player = makePilot(); s.add(city.player);
 }
 function buildSite(site){
@@ -606,7 +606,7 @@ function groundAt(p, outP, outUp){
   const s=siteAt(p);
   if(s){ const l=toLocal(s,p,_gl); l.y = isOnSidewalk(s,l.x,l.z)?.2:0; toWorld(s,l,outP); outUp.copy(s.up); GN.copy(s.up); groundWater=false; return s; }
   const d=_gd.subVectors(p,PC).normalize(), r=groundR(d); outP.copy(PC).addScaledVector(d,r); surfaceUp(d,outUp);
-  groundWater = r < PLANET.R+PLANET.SEA-1.2; return null;
+  groundWater = r < seaR()-1.2; return null;
 }
 function isOnSidewalk(s,x,z){
   if(Math.abs(x)>=s.ext || Math.abs(z)>=s.ext) return false;
@@ -615,7 +615,7 @@ function isOnSidewalk(s,x,z){
 }
 function altitudeOf(P){
   const s=siteAt(P); if(s) return toLocal(s,P,_gl).y;
-  const d=_gd.subVectors(P,PC).normalize(); return P.distanceTo(PC) - Math.max(groundR(d), PLANET.R+PLANET.SEA);
+  const d=_gd.subVectors(P,PC).normalize(); return P.distanceTo(PC) - Math.max(groundR(d), seaR());
 }
 
 // ---------------------------------------------------------------- câmera
@@ -656,7 +656,7 @@ function updateWalk(dt,t){
   city.vy -= 15*dt; city.air = Math.max(0, city.air+city.vy*dt); if(city.air===0 && city.vy<0) city.vy=0;
   collideWorld(P,.4,true);
   const s = groundAt(P,_gp,_gu);
-  if(!s && groundWater){ P.copy(_prev); groundAt(P,_gp,_gu); if(t-waterT>3){ waterT=t; toast('Água profunda — não dá para atravessar a nado', '#5ef2ff'); } }
+  if(!s && groundWater){ P.copy(_prev); groundAt(P,_gp,_gu); if(t-waterT>3){ waterT=t; toast(CUR_P.seaMsg, CUR_P.seaMat&&CUR_P.seaMat.emissive?'#ff7a3a':'#5ef2ff'); } }
   P.copy(_gp).addScaledVector(_gu, city.air);
   if(!isFinite(P.x+P.y+P.z)){ P.copy(_prev); city.air=0; city.vy=0; }           // salvaguarda contra posição inválida
   transport(F,_gu); city.here = s;
@@ -666,6 +666,7 @@ function updateWalk(dt,t){
   if(settings.fp) camFirst(_tgt.copy(P).addScaledVector(F.up,1.72), F, city.yaw, city.pitch);
   else if(combat.aiming) camThird(_tgt.copy(P).addScaledVector(F.up,1.65).add(_mv.set(Math.cos(city.yaw)*.85,0,-Math.sin(city.yaw)*.85).applyQuaternion(F.q)), F, city.yaw, city.pitch, 2.9);   // por cima do ombro
   else camThird(_tgt.copy(P).addScaledVector(F.up,1.6), F, city.yaw, city.pitch, 4.6);
+  if(!settings.fp) pilotFade(p, city.cam.position.distanceTo(_tgt));
   // interação
   let best=null, bd=99;
   for(const it of cityInteractables()){ const d=it.d-(it.prio?5:0); if(it.d<it.r && d<bd){ bd=d; best=it; } }   // empregos/recompensas têm prioridade
@@ -705,6 +706,7 @@ function cityInteract(){
 
 // ---------------------------------------------------------------- veículos do jogador
 function syncCityVehicles(){
+  if(CUR_P.id!=='aurora') return;                            // carros ficam em Aurora
   for(const id of state.vehicles){
     if(city.vehicles[id]) continue;
     const def=VEHICLES[id], c=makeCar(def.kind, def.color, def.glow), k=state.vehicles.indexOf(id), sv=state.vpos[id];
@@ -791,20 +793,22 @@ function vehicleHits(v){
 function shipPark(){
   const m=activeShip().model, sp=state.ship;
   if(sp && sp.p) return { p:new V3().fromArray(sp.p), q:new THREE.Quaternion().fromArray(sp.q), up:new V3().fromArray(sp.up), yaw:sp.yaw };
-  return { p:new V3(HANGAR_PAD.x, shipLift(m), HANGAR_PAD.z), q:new THREE.Quaternion(), up:new V3(0,1,0), yaw:Math.PI/2 };
+  const pad = CUR_P.id==='aurora' ? HANGAR_PAD : OUTPOST_PAD;
+  return { p:new V3(pad.x, shipLift(m), pad.z), q:new THREE.Quaternion(), up:new V3(0,1,0), yaw:Math.PI/2 };
 }
 function syncHangarShip(){
   const m=activeShip().model;
   if(!city.ship || city.shipModel!==m){ if(city.ship) city.scene.remove(city.ship.g); city.ship=makeShip(m); city.ship.g.scale.setScalar(SHIP_SCALE); city.scene.add(city.ship.g); city.shipModel=m; }
-  if(city.fly || city.launch) return;
+  if(city.fly || city.launch || (city.summon && city.summon.kind==='ship')) return;
   const pk=shipPark(), s=city.ship;
   s.g.position.copy(pk.p); s.g.quaternion.copy(pk.q).multiply(qYaw(pk.yaw));
   s.flames.forEach(f=>f.scale.set(1,.15,1)); s.light.intensity=.2; s.model.visible=true; s.model.rotation.set(0,0,0);
 }
 function boardShip(){
+  if(city.summon) return;
   const pk=shipPark();
   city.fly = { F:{ q:pk.q.clone(), up:pk.up.clone() }, yaw:pk.yaw, pitch:0, aimYaw:pk.yaw, aimPitch:0, speed:0, throttle:0, lift:2.4, landing:null };
-  city.player.visible=false; city.mining=null; engineStart('ship'); sfx.door(); noise({dur:2.5,vol:.3,freq:220});
+  city.player.visible=false; city.mining=null; state.shipLoc='flying'; engineStart('ship'); sfx.door(); noise({dur:2.5,vol:.3,freq:220});
   hudFor('city'); toast('Mouse: mira · W/S: potência · Shift: pós-combustor · E: pousar · O: subir à órbita', '#5ef2ff');
 }
 const _fq=new THREE.Quaternion(), _fe=new THREE.Euler(0,0,0,'YXZ'), _ff=new V3(), _foff=new V3();
@@ -842,7 +846,7 @@ function updateFly(dt,t){
   transport(f.F,_gu); city.here=s;
   let alt;
   if(s){ const l=toLocal(s,P,_gl); alt=l.y; if(f.lift<=0 && insideBoxLocal(s,l.x,l.y,l.z,2)) return shipCrash('Colisão com um prédio'); }
-  else { const gr=groundR(d), sea=PLANET.R+PLANET.SEA; alt=P.distanceTo(PC)-Math.max(gr,sea); if(gr<sea && alt<2 && f.speed>20) return shipCrash('Mergulho no oceano'); }
+  else { const gr=groundR(d), sea=seaR(); alt=P.distanceTo(PC)-Math.max(gr,sea); if(gr<sea && alt<2 && f.speed>20) return shipCrash(CUR_P.seaCrash); }
   f.vs = f.alt===undefined ? 0 : f.vs + ((alt-f.alt)/Math.max(dt,1e-3) - f.vs)*Math.min(1,4*dt);   // velocidade vertical
   f.alt=alt;
   if(alt<lift && f.lift<=0){ if(f.speed>34) return shipCrash('Queda da nave'); P.addScaledVector(f.F.up, lift-alt); f.speed*=.6; }
@@ -874,14 +878,14 @@ function flyInteract(){
   const sh=city.ship, P=sh.g.position, lift=shipLift(city.shipModel), np=nearPad(P);
   let to;
   if(np){ to=toWorld(np.s, new V3(np.pad.x, lift, np.pad.z), new V3()); _gu.copy(np.s.up); }
-  else { const s=groundAt(P,_gp,_gu); if(!s && groundWater){ toast('Não é possível pousar na água', '#ff4a4a'); sfx.error(); return; } to=_gp.clone().addScaledVector(_gu,lift); }
+  else { const s=groundAt(P,_gp,_gu); if(!s && groundWater){ toast(CUR_P.seaLand, '#ff4a4a'); sfx.error(); return; } to=_gp.clone().addScaledVector(_gu,lift); }
   transport(f.F,_gu); f.pitch=0; f.aimPitch=0;
   f.landing = { t:0, from:P.clone(), to, qFrom:sh.g.quaternion.clone(), qTo:flyQuat(f,new THREE.Quaternion()), pad:np?np.pad:null };
   sfx.door();
 }
 function finishLanding(){
   const f=city.fly, L=f.landing;
-  state.ship = { p:L.to.toArray(), q:f.F.q.toArray(), up:f.F.up.toArray(), yaw:f.yaw, pad:L.pad?L.pad.name:null }; save();
+  state.ship = { p:L.to.toArray(), q:f.F.q.toArray(), up:f.F.up.toArray(), yaw:f.yaw, pad:L.pad?L.pad.name:null }; state.shipLoc=CUR_P.id; save();
   city.fly=null; engineStop();
   const right=_mv.set(Math.cos(f.yaw),0,-Math.sin(f.yaw)).applyQuaternion(f.F.q);
   city.player.position.copy(L.to).addScaledVector(right, 9);
@@ -893,7 +897,7 @@ function finishLanding(){
 function shipCrash(why){
   city.fly=null; engineStop(); sfx.boom(); noise({dur:1.2,vol:.5,freq:400});
   state.stats.hp = Math.max(8, state.stats.hp-40); state.ship=null; save();
-  setCenter(`NAVE DESTRUÍDA<br><span style="font-size:24px;color:#ffb347">${why} · rebocada ao Hangar 07</span>`, 2.6);
+  setCenter(`NAVE DESTRUÍDA<br><span style="font-size:24px;color:#ffb347">${why} · rebocada ${CUR_P.id==='aurora'?'ao Hangar 07':'à '+SITES[0].pads[0].name}</span>`, 2.6);
   setTimeout(()=>transition(()=>enterCity('hangar')), 1800);
 }
 function startAscent(){
@@ -921,20 +925,34 @@ function endLaunch(){ city.launch=null; document.getElementById('alt').style.dis
 
 // ---------------------------------------------------------------- entrada na cidade, HUD e minimapa
 function cityPlace(where){
+  if(city.summon && city.summon.kind==='car') engineStop(); city.summon=null;
   syncCityVehicles(); city.drive=null; city.fly=null; city.mining=null; engineStop();
   const p=city.player, F=city.frame; p.visible=!settings.fp; city.air=0; city.vy=0;
-  if(where==='hangar'){ state.ship=null; save(); }
+  if(where==='hangar'){ state.ship=null; state.shipLoc=CUR_P.id; save(); }
   syncHangarShip();
-  if(where==='reentry'){
-    p.visible=false; const sh=city.ship;
-    city.fly = { F:makeFrame(), yaw:0, pitch:-.12, aimYaw:0, aimPitch:-.12, speed:260, throttle:.8, lift:0, landing:null };
-    sh.g.position.set(0,6500,3500); engineStart('ship');
+  if(where==='reentry' || (where && where.reentryDir)){
+    p.visible=false; const sh=city.ship, F2=makeFrame();
+    city.fly = { F:F2, yaw:0, pitch:-.12, aimYaw:0, aimPitch:-.12, speed:260, throttle:.8, lift:0, landing:null };
+    if(where.reentryDir){ const d=where.reentryDir; F2.q.setFromUnitVectors(Y_AXIS,d); F2.up.copy(d); sh.g.position.copy(PC).addScaledVector(d, Math.max(groundR(d),seaR())+1800); }
+    else sh.g.position.set(0,6500,3500);
+    engineStart('ship'); state.shipLoc='flying';
     return;
+  }
+  if(where && where.ground){                                 // pouso direto da órbita fora de cidades: ao lado da nave
+    const pk=shipPark(); F.q.copy(pk.q); F.up.copy(pk.up);
+    p.position.copy(pk.p).addScaledVector(_mv.set(1,0,0).applyQuaternion(pk.q), 9);
+    groundAt(p.position,_gp,_gu); if(!groundWater) p.position.copy(_gp); transport(F,_gu);
+    city.yaw=0; city.heading=Math.PI; city.pitch=settings.fp?0:.2; return;
   }
   const site = where && where.site ? where.site : SITES[0];
   F.q.copy(site.group.quaternion); F.up.copy(site.up);
   let local;
-  if(where==='hangar') { local=new V3(HANGAR_PAD.x-12,.3,6); city.yaw=-Math.PI/2-.4; city.heading=Math.PI/2; }
+  if(where && where.pad){ local=new V3(where.pad.x-14,.2,where.pad.z+8); city.yaw=-Math.PI/2-.4; city.heading=Math.PI/2; }
+  else if(site.outpost){
+    if(where==='hangar'){ local=new V3(OUTPOST_PAD.x-14,.2,8); city.yaw=-Math.PI/2-.4; city.heading=Math.PI/2; }
+    else { local=site.spawn.clone(); city.yaw=0; city.heading=Math.PI; }
+  }
+  else if(where==='hangar') { local=new V3(HANGAR_PAD.x-12,.3,6); city.yaw=-Math.PI/2-.4; city.heading=Math.PI/2; }
   else if(where==='home'){ local=new V3(HOME_DOOR.x,.2,HOME_DOOR.z-2.5); city.yaw=0; city.heading=Math.PI; }
   else { local=site.spawn.clone(); city.yaw=0; city.heading=Math.PI; }
   toWorld(site, local, p.position);
@@ -962,7 +980,7 @@ function drawMinimap(){
   _mq.copy(fr.q).invert(); const cs=Math.cos(yaw), sn=Math.sin(yaw);
   const toMap=(wp)=>{ const v=_mv2.subVectors(wp,P).applyQuaternion(_mq); return [W/2+k*(v.x*cs-v.z*sn), W/2+k*(v.x*sn+v.z*cs)]; };
   g.save(); g.setTransform(1,0,0,1,0,0); g.clearRect(0,0,W,W); g.beginPath(); g.arc(W/2,W/2,W/2-2,0,Math.PI*2); g.clip();
-  g.fillStyle='#24301f'; g.fillRect(0,0,W,W);
+  g.fillStyle={ aurora:'#24301f', cinzar:'#241816', hialis:'#36404e' }[CUR_P.id]; g.fillRect(0,0,W,W);
   for(const s of SITES){
     if(s.center.distanceTo(P) > 3000) continue;
     const ex=_mv2.set(1,0,0).applyQuaternion(s.group.quaternion).applyQuaternion(_mq), ezx=new V3(0,0,1).applyQuaternion(s.group.quaternion).applyQuaternion(_mq);
@@ -975,14 +993,14 @@ function drawMinimap(){
     g.fillStyle='rgba(0,0,0,.6)'; g.beginPath(); g.arc(mx,mz,9,0,Math.PI*2); g.fill(); g.fillStyle=col; g.font='bold 13px monospace'; g.textAlign='center'; g.textBaseline='middle'; g.fillText(txt,mx,mz+1); };
   const dot=(wp,col,r=3)=>{ const [mx,mz]=toMap(wp); if(Math.hypot(mx-W/2,mz-W/2)>W/2) return; g.fillStyle=col; g.fillRect(mx-r,mz-r,2*r,2*r); };
   for(const s of SITES){ if(s.center.distanceTo(P)>2500) continue; for(const sh of s.shops) if(sh.act) dot(toWorld(s,_tgt.set(sh.x,0,sh.z),new V3()), sh.color); }
-  for(const dep of nearbyDeposits()) dot(dep.pos, dep.type==='crystal'?'#7ff6ff':dep.type==='herbs'?'#c87aff':'#ffb347', 3);
+  for(const dep of nearbyDeposits()) dot(dep.pos, { crystal:'#7ff6ff', herbs:'#c87aff', magmatite:'#ff5a1a', cryonite:'#e0f8ff', titanium:'#d8e0e8' }[dep.type]||'#ffb347', 3);
   for(const id in city.vehicles) if(city.vehicles[id]!==city.drive) dot(city.vehicles[id].g.position,'#5ef2ff',2);
   for(const u of policeUnitsWorld()) dot(u,'#ff3a3a',3);
   for(const [p,c] of combatMapDots()){ if(c==='camp'){ if(p.distanceTo(P)<4000) icon(p,'▲','#ff6a5a'); } else dot(p,c,3); }
   const ob=currentObjective(); if(ob) icon(ob.pos,'!','#ffd040');
   if(city.ship && !city.fly) icon(city.ship.g.position,'✈','#ffb347');
-  icon(toWorld(SITES[0],HOME_DOOR,new V3()),'⌂','#5ef2ff'); icon(toWorld(SITES[0],HANGAR_PAD,new V3()),'H','#ff7a3a');
-  icon(SITES[1].center,'P','#ff9a5a');
+  if(CUR_P.id==='aurora'){ icon(toWorld(SITES[0],HOME_DOOR,new V3()),'⌂','#5ef2ff'); icon(toWorld(SITES[0],HANGAR_PAD,new V3()),'H','#ff7a3a'); icon(SITES[1].center,'P','#ff9a5a'); }
+  else { icon(SITES[0].center,'◈','#5ef2ff'); icon(toWorld(SITES[0],OUTPOST_PAD,new V3()),'H','#ff7a3a'); }
   g.translate(W/2,W/2); g.fillStyle='#ffb347'; g.beginPath(); g.moveTo(0,-9); g.lineTo(6,7); g.lineTo(0,3); g.lineTo(-6,7); g.closePath(); g.fill();
   g.restore();
   g.strokeStyle='#9a6a2a'; g.lineWidth=2; g.beginPath(); g.arc(W/2,W/2,W/2-2,0,Math.PI*2); g.stroke();
@@ -996,17 +1014,17 @@ function cityHUD(){
   else if(f){ const vs=Math.round(f.vs||0);
     html = `<b>${SHIPS[activeShip().model].name}</b> · ALT ${fmtKm(Math.max(0,f.alt||0))} <span style="color:${vs>1?'var(--green)':vs<-1?'var(--red)':'var(--muted)'}">${vs>1?'▲':vs<-1?'▼':'■'} ${Math.abs(vs)} m/s</span> · ${Math.round(f.speed*3.6).toLocaleString('pt-BR')} km/h`; }
   else if(v) html = `<b>${v.def.name}</b> · ${Math.round(Math.abs(v.speed)*3.6)} km/h`;
-  else if(city.here) html = `AURORA · ${city.here.name}<br><span style="font-size:16px;color:var(--muted)">${city.here.sub}</span>`;
+  else if(city.here) html = `${CUR_P.name} · ${city.here.name}<br><span style="font-size:16px;color:var(--muted)">${city.here.sub}</span>`;
   else { const d=_gd.subVectors(P,PC).normalize(), b=biomeOf(d, groundR(d)-PLANET.R), near=SITES.reduce((a,s)=>s.center.distanceTo(P)<a.center.distanceTo(P)?s:a);
-    html = `AURORA · ${BIOME_NAME[b]}<br><span style="font-size:16px;color:var(--muted)">Área selvagem · ${fmtKm(near.center.distanceTo(P))} de ${near.name.toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase())}</span>`; }
+    html = `${CUR_P.name} · ${biomeName(b)}<br><span style="font-size:16px;color:var(--muted)">Área selvagem · ${fmtKm(near.center.distanceTo(P))} de ${near.name.toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase())}</span>`; }
   if(loc._h!==html){ loc.innerHTML=html; loc._h=html; }
   const mh=document.getElementById('mk-hangar'), mc=document.getElementById('mk-home'), ms=document.getElementById('mk-station');
   if(city.launch){ mh.style.display=mc.style.display=ms.style.display='none'; return; }
   drawMinimap();
-  const k1=SITES[0], home=toWorld(k1,_tgt.set(HOME_DOOR.x,6,HOME_DOOR.z),new V3()), dc=home.distanceTo(P);
+  const k1=SITES[0], home=CUR_P.id==='aurora' ? toWorld(k1,_tgt.set(HOME_DOOR.x,6,HOME_DOOR.z),new V3()) : k1.center.clone().addScaledVector(k1.up,8), dc=home.distanceTo(P);
   const shipP = city.ship && !f ? city.ship.g.position : null, dsh = shipP ? shipP.distanceTo(P) : 0;
   if(shipP && dsh>30) marker(mh, _tgt.copy(shipP), `NAVE<br>${fmtKm(dsh)}`, city.cam); else mh.style.display='none';
-  if(dc>25 && dc<6000) marker(mc, home, `CASA<br>${fmtKm(dc)}`, city.cam); else mc.style.display='none';
+  if(dc>25 && dc<6000) marker(mc, home, `${CUR_P.id==='aurora'?'CASA':'POSTO'}<br>${fmtKm(dc)}`, city.cam); else mc.style.display='none';
   const other = SITES.find(s=>s!==city.here && s.center.distanceTo(P)>2500 && s.center.distanceTo(P)<60000 && (f || s.center.distanceTo(P)<15000));
   if(other){ ms.style.color='#ff9a5a'; marker(ms, _tgt.copy(other.center).addScaledVector(other.up,300), `${other.name}<br>${fmtKm(other.center.distanceTo(P))}`, city.cam); }
   else ms.style.display='none';
@@ -1028,7 +1046,7 @@ function updateCity(dt,t){
     for(const fn of s.anim) fn(t,dt);
   }
   updateChunks(P, t);
-  updateCombat(dt,t); updateWork(dt,t);
+  updateCombat(dt,t); updateWork(dt,t); updateSummon(dt);
   if(t-city.tickT>.07){ city.tickT=t; drawTicker(t); }
   const cp=city.cam.position, d=_gd.subVectors(cp,PC).normalize(), camAlt = altitudeOf(cp);
   surfaceUp(d,_camUp);

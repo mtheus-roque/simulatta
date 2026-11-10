@@ -121,6 +121,12 @@ function buildHub(){
   syncFurniture();
 }
 
+// semitransparência do personagem quando a câmera chega perto (ex.: olhando para cima em 3ª pessoa)
+function pilotFade(g, camDist){
+  const a = clamp((camDist-.9)/2.3, .28, 1);
+  if(g.userData.alpha!==undefined && Math.abs(g.userData.alpha-a)<.01) return; g.userData.alpha=a;
+  g.traverse(o=>{ if(!o.isMesh) return; const m=o.material; m.transparent = a<1; m.opacity=a; m.depthWrite = a>=1; m.needsUpdate=true; });
+}
 function makePilot(){
   const g = new THREE.Group();
   const coat=M(0x6b5636), dark=M(0x24242a), skin=M(0xc89a72), hair=M(0x1c1612);
@@ -235,6 +241,7 @@ function updateHub(dt, t){
     if(x>-W/2+.3 && x<W/2-.3 && z>-D/2+.3 && z<D/2-.3 && y>.25 && y<H-.25) break; }
   hub.cam.position.set(_ct.x+_cf.x*d, _ct.y+_cf.y*d, _ct.z+_cf.z*d);
   hub.cam.lookAt(_ct);
+  pilotFade(p, d);
   }
   animateHubScreens(t);
   let best=null, bd=1.9;
