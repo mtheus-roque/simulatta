@@ -333,10 +333,14 @@ function buildChunk(ci,cj){
   city.scene.add(g); ch.group=g;
   return ch;
 }
+let _magmaGlow=null;
+function magmaGlow(){ return _magmaGlow || (_magmaGlow = new THREE.SpriteMaterial({ map:canvasTex(64,64,(g)=>{ const rg=g.createRadialGradient(32,32,0,32,32,32);
+  rg.addColorStop(0,'rgba(255,140,40,.9)'); rg.addColorStop(.4,'rgba(255,80,10,.35)'); rg.addColorStop(1,'rgba(255,60,0,0)'); g.fillStyle=rg; g.fillRect(0,0,64,64); }),
+  transparent:true, blending:THREE.AdditiveBlending, depthWrite:false })); }
 function makeDeposit(type, rng){
   const W=wildMats(), g=new THREE.Group();
   if(type==='magmatite'){ for(let i=0;i<4;i++){ const r=new THREE.Mesh(new THREE.DodecahedronGeometry(.5+rng()*.4,0), i%2?W.magma:W.basalt); r.position.set(rng()*1.4-.7,.4,rng()*1.4-.7); r.rotation.set(rng()*3,rng()*3,0); g.add(r); }
-    const l=new THREE.PointLight(0xff6a20,.8,7); l.position.y=1; g.add(l); }
+    const gl=new THREE.Sprite(magmaGlow()); gl.scale.setScalar(4.5); gl.position.y=.9; g.add(gl); }   // brilho sem luz: luzes que entram e saem da cena recompilam os shaders
   else if(type==='cryonite'){ for(let i=0;i<6;i++){ const h=.8+rng()*1.6; const c=new THREE.Mesh(new THREE.OctahedronGeometry(.35,0),W.cryo); c.scale.set(1,h*1.6,1); c.position.set(rng()*1.2-.6,h*.45,rng()*1.2-.6); c.rotation.set(rng()*.6-.3,rng()*3,rng()*.6-.3); g.add(c); } }
   else if(type==='crystal'){ for(let i=0;i<5;i++){ const h=1.2+rng()*1.8; const c=new THREE.Mesh(new THREE.ConeGeometry(.3,h,5),W.crystal); c.position.set(rng()*1.2-.6,h/2,rng()*1.2-.6); c.rotation.set(rng()*.5-.25,0,rng()*.5-.25); g.add(c); } }
   else if(type==='herbs'){ const b=new THREE.Mesh(new THREE.IcosahedronGeometry(.8,0),W.bush); b.scale.y=.6; b.position.y=.4; g.add(b);

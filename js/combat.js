@@ -13,7 +13,8 @@ const EN_W = {
 };
 const _c1=new V3(), _c2=new V3(), _c3=new V3(), _c4=new V3(), _ep=new V3(), _eu=new V3(), _cqi=new THREE.Quaternion(), _cqk=new THREE.Quaternion();
 const sparkGeo = new THREE.BoxGeometry(.18,.18,.18);
-function initCombat(){ combat.flash=new THREE.PointLight(0xffd090,0,9); city.scene.add(combat.flash); initCamps(); initTurfs(); }
+function initCombat(){ combat.flash=new THREE.PointLight(0xffd090,0,9); city.scene.add(combat.flash);
+  combat.campLight=new THREE.PointLight(0xff8a3a,0,22); city.scene.add(combat.campLight); initCamps(); initTurfs(); }
 
 // ---------------------------------------------------------------- armas do jogador
 const ownsWeapon = id => id==='fists' || qty('w_'+id)>0;
@@ -257,11 +258,13 @@ function buildCampMesh(c){
   const g=new THREE.Group(), tent=M(0x8a6a4a), tent2=M(0x6a4a3a);
   [[6,4],[-6,3],[2,-7]].forEach(([x,z],i)=>{ const m=new THREE.Mesh(new THREE.ConeGeometry(2.4,3,4),i%2?tent2:tent); m.position.set(x,1.5,z); m.rotation.y=.7; g.add(m); });
   const fire=new THREE.Mesh(new THREE.ConeGeometry(.6,1.2,5),B(0xff8a3a)); fire.position.y=.6; g.add(fire);
-  const fl=new THREE.PointLight(0xff8a3a,1.4,22); fl.position.y=2; g.add(fl);
+  c.fireLocal=new V3(0,2,0);                                  // a luz da fogueira é uma só, reaproveitada (combat.campLight)
   c.crateMesh=box(1.4,1,1,M(0x5a4a30),-2,.5,4,g); box(1.42,.15,1.02,M(0xd8a020),-2,.75,4,g);
   placeOnPlanet(g,c.pos,0); city.scene.add(g); g.updateMatrixWorld(true); c.g=g;
 }
 function updateCamps(P){
+  let near=null, nd=1e9; for(const c of combat.camps) if(c.g){ const d=c.pos.distanceTo(P); if(d<nd){ nd=d; near=c; } }
+  if(near){ near.g.localToWorld(combat.campLight.position.copy(near.fireLocal)); combat.campLight.intensity=1.4; } else combat.campLight.intensity=0;
   for(const c of combat.camps){
     const d=c.pos.distanceTo(P), cleared = state.camps[c.id] && Date.now()-state.camps[c.id] < CAMP_RESPAWN;
     if(d<1600 && !c.g) buildCampMesh(c);
